@@ -1,0 +1,968 @@
+<!--
+07妙妙屋订单管理系统 - 主页面
+
+功能模块：
+1. 背景设置面板 - 自定义页面背景图片和透明度
+2. 订单统计卡片 - 显示各类订单数量和金额统计
+3. 图例说明 - 订单紧急程度和状态的颜色说明
+4. 筛选和排序 - 按状态、紧急程度等条件筛选订单
+5. 订单列表表格 - 显示所有订单详细信息
+6. 批量操作 - 支持批量删除等操作
+-->
+{% extends "base.html" %}
+
+{% block title %}订单列表 - 07妙妙屋{% endblock %}
+
+{% block content %}
+
+<!-- ==================== 背景设置面板 ==================== -->
+<div class="card mb-4" id="backgroundSettings" style="display: none;">
+    <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-palette"></i> 背景设置</h5>
+        <div class="row">
+            <!-- 背景图片上传 -->
+            <div class="col-md-6">
+                <label for="backgroundImage" class="form-label">上传背景图片</label>
+                <input type="file" class="form-control" id="backgroundImage" accept="image/*" onchange="handleBackgroundUpload(event)">
+            </div>
+            <!-- 透明度调节 -->
+            <div class="col-md-3">
+                <label for="backgroundOpacity" class="form-label">透明度: <span id="opacityValue">50%</span></label>
+                <input type="range" class="form-range" id="backgroundOpacity" min="0" max="100" value="50" oninput="updateBackgroundOpacity(this.value)">
+            </div>
+            <!-- 移除背景按钮 -->
+            <div class="col-md-3">
+                <button class="btn btn-outline-danger" onclick="removeBackground()">
+                    <i class="bi bi-trash"></i> 移除背景
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 订单统计卡片 ==================== -->
+<div class="row mb-4">
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-blue">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-list-ul"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">{{ orders|length }}</h5>
+                    <p class="stats-label mb-0">总订单数</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-green">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">{{ orders|selectattr('deposit_paid')|list|length }}</h5>
+                    <p class="stats-label mb-0">已付定金</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-orange">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-currency-yen"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">¥{{ "%.0f"|format(orders|sum(attribute='final_amount')) }}</h5>
+                    <p class="stats-label mb-0">总金额</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-purple">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-box"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">{{ orders|selectattr('blank_purchased')|list|length }}</h5>
+                    <p class="stats-label mb-0">已购毛坯</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-yellow">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">{{ orders|selectattr('status', 'equalto', '待制作')|list|length }}</h5>
+                    <p class="stats-label mb-0">待制作</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
+        <div class="card stats-card gradient-card-teal">
+            <div class="card-body d-flex align-items-center">
+                <div class="stats-icon me-3">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="stats-content">
+                    <h5 class="stats-number mb-1">{{ orders|selectattr('status', 'in', ['已完成', '已发货'])|list|length }}</h5>
+                    <p class="stats-label mb-0">已完成</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选和排序选项控制面板 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <!-- 筛选选项 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="card-title mb-3"><i class="bi bi-funnel"></i> 筛选选项 </h6>
+                <div class="row">
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label">平台</label>
+                        <select class="form-select form-select-sm" id="platformFilter" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="QQ" {{ 'selected' if platform_filter == 'QQ' }}>QQ</option>
+                            <option value="微信" {{ 'selected' if platform_filter == '微信' }}>微信</option>
+                            <option value="闲鱼" {{ 'selected' if platform_filter == '闲鱼' }}>闲鱼</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label">定金状态</label>
+                        <select class="form-select form-select-sm" id="depositFilter" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="paid">已付</option>
+                            <option value="unpaid">未付</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label">含邮状态</label>
+                        <select class="form-select form-select-sm" id="shippingFilter" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="included">包邮</option>
+                            <option value="not-included">不包邮</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label">毛坯状态</label>
+                        <select class="form-select form-select-sm" id="blankFilter" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="purchased">已购</option>
+                            <option value="unpurchased">未购</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2">
+                        <label class="form-label">订单状态</label>
+                        <select class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="待制作">待制作</option>
+                            <option value="制作中">制作中</option>
+                            <option value="已完成">已完成</option>
+                            <option value="已发货">已发货</option>
+                            <option value="已取消">已取消</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 mb-2 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">
+                            <i class="bi bi-arrow-clockwise"></i> 清除筛选
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12 text-end">
+                        <div class="form-check form-switch d-inline-block me-3">
+                            <input class="form-check-input" type="checkbox" id="showCompleted" 
+                                   {{ 'checked' if show_completed }} onchange="toggleCompleted()">
+                            <label class="form-check-label" for="showCompleted">
+                                显示已完成订单
+                            </label>
+                        </div>
+                        <button class="btn btn-outline-danger btn-sm" id="toggleBatchModeBtn" onclick="toggleBatchMode()">
+                            <i class="bi bi-check-square"></i> 批量操作
+                        </button>
+                        <button class="btn btn-danger btn-sm" id="batchDeleteBtn" onclick="batchDelete()" style="display: none;">
+                            <i class="bi bi-trash"></i> 批量删除
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="cancelBatchModeBtn" onclick="cancelBatchMode()" style="display: none;">
+                            <i class="bi bi-x"></i> 取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+    </div>
+</div>
+
+<!-- 订单表格 -->
+{% if orders %}
+<div class="table-container ">
+    <div class="table-responsive" >
+        <table class="table table-hover">
+        <thead>
+            <tr  style="font-size: 17px;">
+                <th class="checkbox-column" style="width: 50px; display: none;">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                </th>
+                <th style="width: 80px;">CN</th>
+                <th style="width: 100px;">角色</th>
+                <th style="width: 120px;">平台</th>
+                <th style="width: 100px;">排单</th>
+                <th style="width: 100px;">ddl</th>
+                <th style="width: 80px;">定金</th>
+                <th style="width: 100px;">尾款</th>
+                <th style="width: 100px;">含邮</th>
+                <th style="width: 100px;">毛坯</th>
+                <th style="width: 100px;">蛋糕盒</th>
+                <th style="width: 100px;">状态</th>
+                <th style="width: 100px;">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            {% set days_left = (order.needed_date - today).days if today else 0 %}
+            <tr class="{% if order.status == '已完成' %}completed{% elif order.status == '已发货' %}shipped{% elif days_left < 0 and order.status not in ['已完成', '已发货'] %}expired{% elif days_left <= 3 and days_left >= 0 %}very-urgent{% elif days_left <= 7 and days_left >= 0 %}urgent{% else %}overdue{% endif %}">
+                <td class="checkbox-column" style="display: none;">
+                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}" onchange="updateBatchDeleteBtn()">
+                </td>
+                <td><strong>{{ order.cn }}</strong></td>
+                <td>{{ order.character }}</td>
+                <td>
+                    <select class="form-select form-select-sm contact-select" onchange="updateOrderField({{ order.id }}, 'contact', this.value); updateSelectColors();">
+                        <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
+                        <option value="微信" {{ 'selected' if order.contact == '微信' }}>&#xf1d7; 微信</option>
+                        <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xe057; 闲鱼</option>
+                    </select>
+                </td>
+                <td>
+                    {{ order.needed_date.strftime('%Y-%m-%d') }}
+                    {% if days_left <= 7 and days_left >= 0 and order.status not in ['已完成', '已发货'] %}
+                        <br><small style="color: #fa1818;">还有{{ days_left }}天</small>
+                    {% endif %}
+                    {% if days_left < 0  and order.status not in ['已完成', '已发货'] %}
+                        <br><small style="color: #ffffff;font-weight: 600;font-size: 16px;">逾期{{ days_left|abs }}天</small>
+                    {% endif %}
+                </td>
+                <td>{{ order.order_date.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    <select class="form-select form-select-sm deposit-select" onchange="updateOrderField({{ order.id }}, 'deposit_paid', this.value === 'true'); updateSelectColors();">
+                        <option value="false" {{ 'selected' if not order.deposit_paid }}>未付</option>
+                        <option value="true" {{ 'selected' if order.deposit_paid }}>已付</option>
+                    </select>
+                </td>
+                <td>¥{{ "%.2f"|format(order.final_amount) }}</td>
+                <td>
+                    <select class="form-select form-select-sm shipping-select" onchange="updateOrderField({{ order.id }}, 'shipping_included', this.value === 'true'); updateSelectColors();">
+                        <option value="false" {{ 'selected' if not order.shipping_included }}>不含邮</option>
+                        <option value="true" {{ 'selected' if order.shipping_included }}>含邮</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm blank-select" onchange="updateOrderField({{ order.id }}, 'blank_purchased', this.value === 'true'); updateSelectColors();">
+                        <option value="false" {{ 'selected' if not order.blank_purchased }}>未购</option>
+                        <option value="true" {{ 'selected' if order.blank_purchased }}>已购</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm cake-box-select" onchange="updateOrderField({{ order.id }}, 'cake_box', this.value); updateSelectColors();">
+                        <option value="不需要" {{ 'selected' if order.cake_box == '不需要' }}>不需要</option>
+                        <option value="需要" {{ 'selected' if order.cake_box == '需要' }}>需要</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm status-select" onchange="updateOrderField({{ order.id }}, 'status', this.value); updateSelectColors();">
+                        <option value="待制作" {{ 'selected' if order.status == '待制作' }}>待制作</option>
+                        <option value="制作中" {{ 'selected' if order.status == '制作中' }}>制作中</option>
+                        <option value="已完成" {{ 'selected' if order.status == '已完成' }}>已完成</option>
+                        <option value="已发货" {{ 'selected' if order.status == '已发货' }}>已发货</option>
+                        <option value="已取消" {{ 'selected' if order.status == '已取消' }}>已取消</option>
+                    </select>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('edit_order', id=order.id) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{{ url_for('delete_order', id=order.id) }}" 
+                           class="btn btn-outline-danger btn-sm"
+                           onclick="return confirm('确定要删除这个订单吗？')">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+    <h4 class="mt-3 text-muted">暂无订单</h4>
+    <p class="text-muted">点击上方按钮添加第一个订单</p>
+</div>
+{% endif %}
+
+
+<!-- 日历视图 -->
+<div class="mt-5">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title mb-4"><i class="bi bi-calendar3"></i> 假发制作日历 <span id="calendar-month-count" class="badge ms-2" style="background-color: rgba(13, 110, 253, 0.15); color: #0d6efd; border: 1px solid rgba(13, 110, 253, 0.3); font-weight: 500;"></span></h5>
+            <div id="calendar-container">
+                <div class="calendar-header d-flex justify-content-between align-items-center mb-3">
+                    <button class="btn btn-outline-primary btn-sm" onclick="changeMonth(-1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <h6 id="calendar-month-year" class="mb-0"></h6>
+                    <button class="btn btn-outline-primary btn-sm" onclick="changeMonth(1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="calendar-grid">
+                    <div class="calendar-weekdays">
+                        <div class="calendar-weekday">日</div>
+                        <div class="calendar-weekday">一</div>
+                        <div class="calendar-weekday">二</div>
+                        <div class="calendar-weekday">三</div>
+                        <div class="calendar-weekday">四</div>
+                        <div class="calendar-weekday">五</div>
+                        <div class="calendar-weekday">六</div>
+                    </div>
+                    <div id="calendar-days" class="calendar-days">
+                        <!-- 日历日期将通过JavaScript生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图例说明 -->
+<div class="mt-4">
+    <div class="card">
+        <div class="card-body">
+            <h6 class="card-title mb-3"><i class="bi bi-palette"></i> 颜色说明</h6>
+            <div class="row">
+                <div class="col-12">
+                    <span class="legend-item legend-item-overdue"><i class="bi bi-emoji-angry"></i> 逾期</span>
+                    <span class="legend-item legend-item-very-urgent"><i class="bi bi-emoji-dizzy"></i> 紧急（3天内）</span>
+                    <span class="legend-item legend-item-urgent"><i class="bi bi-emoji-frown"></i> 较急（7天内）</span>
+                    <span class="legend-item legend-item-completed"><i class="bi bi-emoji-sunglasses"></i> 已完成 </span>
+                    <span class="legend-item legend-item-wait"><i class="bi bi-emoji-neutral"></i> 待制作</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <div class="card">
+    </div>
+</div>
+
+<div class="mt-4">
+    <div class="card">
+    </div>
+</div>
+<div class="mt-4">
+    <div class="card">
+    </div>
+</div>
+<div class="mt-4">
+    <div class="card">
+    </div>
+</div>
+<div class="mt-4">
+    <div class="card">
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 切换已完成订单显示
+function toggleCompleted() {
+    const checkbox = document.getElementById('showCompleted');
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('show_completed', checkbox.checked);
+    window.location.href = currentUrl.toString();
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.order-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    updateBatchDeleteBtn();
+}
+
+// 切换批量模式
+function toggleBatchMode() {
+    const checkboxColumns = document.querySelectorAll('.checkbox-column');
+    const toggleBtn = document.getElementById('toggleBatchModeBtn');
+    const cancelBtn = document.getElementById('cancelBatchModeBtn');
+    
+    checkboxColumns.forEach(col => {
+        col.style.display = 'table-cell';
+    });
+    
+    toggleBtn.style.display = 'none';
+    cancelBtn.style.display = 'inline-block';
+}
+
+// 取消批量模式
+function cancelBatchMode() {
+    const checkboxColumns = document.querySelectorAll('.checkbox-column');
+    const checkboxes = document.querySelectorAll('.order-checkbox');
+    const selectAll = document.getElementById('selectAll');
+    const toggleBtn = document.getElementById('toggleBatchModeBtn');
+    const cancelBtn = document.getElementById('cancelBatchModeBtn');
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    
+    // 隐藏复选框列
+    checkboxColumns.forEach(col => {
+        col.style.display = 'none';
+    });
+    
+    // 取消所有选中状态
+    checkboxes.forEach(cb => cb.checked = false);
+    selectAll.checked = false;
+    
+    // 切换按钮显示状态
+    toggleBtn.style.display = 'inline-block';
+    cancelBtn.style.display = 'none';
+    batchDeleteBtn.style.display = 'none';
+}
+
+// 更新批量删除按钮显示状态
+function updateBatchDeleteBtn() {
+    const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    
+    if (checkedBoxes.length > 0) {
+        batchDeleteBtn.style.display = 'inline-block';
+        batchDeleteBtn.innerHTML = `<i class="bi bi-trash"></i> 批量删除 (${checkedBoxes.length})`;
+    } else {
+        batchDeleteBtn.style.display = 'none';
+    }
+}
+
+// 快速更新订单字段
+function updateOrderField(orderId, field, value) {
+    const data = {};
+    data[field] = value;
+    
+    fetch(`/api/update_order/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新下拉框颜色
+            updateSelectColors();
+            // 显示成功提示
+            showToast('更新成功', 'success');
+            // 如果状态改为已完成且当前不显示已完成订单，则刷新页面
+            if (field === 'status' && (value === '已完成' || value === '已发货') && !{{ 'true' if show_completed else 'false' }}) {
+                setTimeout(() => location.reload(), 1000);
+            }
+        } else {
+            showToast('更新失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('网络错误', 'error');
+    });
+}
+
+// 批量删除
+function batchDelete() {
+    const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
+    const orderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+    
+    if (orderIds.length === 0) {
+        alert('请选择要删除的订单');
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${orderIds.length} 个订单吗？此操作不可恢复！`)) {
+        return;
+    }
+    
+    fetch('/api/batch_delete', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order_ids: orderIds })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('删除失败: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('网络错误', 'error');
+    });
+}
+
+// 显示提示消息
+function showToast(message, type) {
+    // 创建提示元素
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+
+// 更新下拉框颜色
+function updateSelectColors() {
+    // 定金状态颜色
+    document.querySelectorAll('.deposit-select').forEach(select => {
+        select.classList.remove('paid', 'unpaid');
+        if (select.value === 'true') {
+            select.classList.add('paid');
+        } else {
+            select.classList.add('unpaid');
+        }
+    });
+    
+    // 毛坯状态颜色
+    document.querySelectorAll('.blank-select').forEach(select => {
+        select.classList.remove('purchased', 'unpurchased');
+        if (select.value === 'true') {
+            select.classList.add('purchased');
+        } else {
+            select.classList.add('unpurchased');
+        }
+    });
+    
+    // 邮费状态颜色
+    document.querySelectorAll('.shipping-select').forEach(select => {
+        select.classList.remove('included', 'not-included');
+        if (select.value === 'true') {
+            select.classList.add('included');
+        } else {
+            select.classList.add('not-included');
+        }
+    });
+    
+    // 蛋糕盒状态颜色
+    document.querySelectorAll('.cake-box-select').forEach(select => {
+        select.classList.remove('needed', 'not-needed');
+        if (select.value === '需要') {
+            select.classList.add('needed');
+        } else {
+            select.classList.add('not-needed');
+        }
+    });
+    
+    // 制作状态颜色
+    document.querySelectorAll('.status-select').forEach(select => {
+        select.classList.remove('pending', 'in-progress', 'completed', 'shipped', 'cancelled');
+        switch(select.value) {
+            case '待制作':
+                select.classList.add('pending');
+                break;
+            case '制作中':
+                select.classList.add('in-progress');
+                break;
+            case '已完成':
+                select.classList.add('completed');
+                break;
+            case '已发货':
+                select.classList.add('shipped');
+                break;
+            case '已取消':
+                select.classList.add('cancelled');
+                break;
+        }
+    });
+    
+    // 平台状态颜色
+    document.querySelectorAll('.contact-select').forEach(select => {
+        select.classList.remove('qq', 'wechat', 'xianyu');
+        switch(select.value) {
+            case 'QQ':
+                select.classList.add('qq');
+                break;
+            case '微信':
+                select.classList.add('wechat');
+                break;
+            case '闲鱼':
+                select.classList.add('xianyu');
+                break;
+        }
+    });
+    
+    // 确保筛选器下拉框也有颜色
+    const platformFilter = document.getElementById('platformFilter');
+    if (platformFilter) {
+        platformFilter.classList.remove('qq', 'wechat', 'xianyu');
+        switch(platformFilter.value) {
+            case 'QQ':
+                platformFilter.classList.add('qq');
+                break;
+            case '微信':
+                platformFilter.classList.add('wechat');
+                break;
+            case '闲鱼':
+                platformFilter.classList.add('xianyu');
+                break;
+        }
+    }
+}
+
+// 日历相关变量和函数
+    let currentDate = new Date();
+    let currentMonth = currentDate.getMonth();
+    let currentYear = currentDate.getFullYear();
+    
+    // 订单数据（从后端传递）
+    const orders = {{ orders_json | tojson | safe }};
+    
+    // 月份名称
+    const monthNames = [
+        '一月', '二月', '三月', '四月', '五月', '六月',
+        '七月', '八月', '九月', '十月', '十一月', '十二月'
+    ];
+    
+    // 生成日历
+    function generateCalendar(month, year) {
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const daysInPrevMonth = new Date(year, month, 0).getDate();
+        
+        const calendarDays = document.getElementById('calendar-days');
+        const monthYear = document.getElementById('calendar-month-year');
+        const monthCount = document.getElementById('calendar-month-count');
+        
+        monthYear.textContent = `${monthNames[month]} ${year}`;
+        calendarDays.innerHTML = '';
+        
+        // 计算该月订单总数
+        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+        const monthOrders = orders.filter(order => {
+            const neededDate = order.needed_date.split(' ')[0];
+            return neededDate >= monthStart && neededDate <= monthEnd;
+        });
+        monthCount.innerHTML = `<i class="bi bi-calendar-check"></i> ${monthNames[month]}：${monthOrders.length}个订单`;
+        
+        // 添加上个月的日期
+        for (let i = firstDay - 1; i >= 0; i--) {
+            const dayDiv = createDayElement(daysInPrevMonth - i, true, month - 1, year);
+            calendarDays.appendChild(dayDiv);
+        }
+        
+        // 添加当前月的日期
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayDiv = createDayElement(day, false, month, year);
+            calendarDays.appendChild(dayDiv);
+        }
+        
+        // 添加下个月的日期以填满网格
+        const totalCells = calendarDays.children.length;
+        const remainingCells = 42 - totalCells; // 6行 x 7列
+        for (let day = 1; day <= remainingCells; day++) {
+            const dayDiv = createDayElement(day, true, month + 1, year);
+            calendarDays.appendChild(dayDiv);
+        }
+    }
+    
+    // 创建日期元素
+    function createDayElement(day, isOtherMonth, month, year) {
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day';
+        
+        if (isOtherMonth) {
+            dayDiv.classList.add('other-month');
+        }
+        
+        // 检查是否是今天
+        const today = new Date();
+        if (!isOtherMonth && day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
+            dayDiv.classList.add('today');
+        }
+        
+        // 添加日期数字
+        const dayNumber = document.createElement('div');
+        dayNumber.className = 'calendar-day-number';
+        dayNumber.textContent = day;
+        dayDiv.appendChild(dayNumber);
+        
+        // 查找该日期的订单（包括跨月日期）
+        let actualMonth = month;
+        let actualYear = year;
+        
+        // 处理跨年情况
+        if (actualMonth < 0) {
+            actualMonth = 11;
+            actualYear = year - 1;
+        } else if (actualMonth > 11) {
+            actualMonth = 0;
+            actualYear = year + 1;
+        }
+        
+        const dateStr = `${actualYear}-${String(actualMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayOrders = orders.filter(order => {
+            const neededDate = order.needed_date.split(' ')[0]; // 只取日期部分
+            return neededDate === dateStr;
+        });
+            
+            // 添加订单事件
+        dayOrders.forEach(order => {
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'calendar-event';
+            
+            // 计算紧急程度
+            const neededDate = new Date(order.needed_date);
+            const diffTime = neededDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays <= 3 && diffDays >= 0) {
+                eventDiv.classList.add('very-urgent');
+            } else if (diffDays <= 7 && diffDays >= 0) {
+                eventDiv.classList.add('urgent');
+            } else if (diffDays < 0  && !['已完成', '已发货'].includes(order.status)) {
+                eventDiv.classList.add('overdue');
+            } else if (order.status == '已完成' || order.status == '已发货') {
+                eventDiv.classList.add('completed');
+            }
+            eventDiv.textContent = `${order.cn} - ${order.character}`;
+            eventDiv.title = `客户: ${order.cn}\n角色: ${order.character}\n联系方式: ${order.contact}\n状态: ${order.status}`;
+            dayDiv.appendChild(eventDiv);
+        });
+        
+        return dayDiv;
+    }
+    
+    // 切换月份
+    function changeMonth(direction) {
+        currentMonth += direction;
+        if (currentMonth > 11) {
+            currentMonth = 0;
+            currentYear++;
+        } else if (currentMonth < 0) {
+            currentMonth = 11;
+            currentYear--;
+        }
+        generateCalendar(currentMonth, currentYear);
+    }
+    
+    // 背景设置相关函数
+    function toggleBackgroundSettings() {
+        const panel = document.getElementById('backgroundSettings');
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+    
+    function handleBackgroundUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imageUrl = e.target.result;
+                document.documentElement.style.setProperty('--bg-image', `url(${imageUrl})`);
+                document.documentElement.style.setProperty('--bg-opacity', '0.5');
+                
+                // 保存到localStorage
+                localStorage.setItem('backgroundImage', imageUrl);
+                localStorage.setItem('backgroundOpacity', '50');
+                
+                // 更新滑块值
+                document.getElementById('backgroundOpacity').value = 50;
+                document.getElementById('opacityValue').textContent = '50%';
+                
+                showToast('背景图片已设置', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    function updateBackgroundOpacity(value) {
+        const opacity = value / 100;
+        document.documentElement.style.setProperty('--bg-opacity', opacity);
+        document.getElementById('opacityValue').textContent = value + '%';
+        
+        // 保存到localStorage
+        localStorage.setItem('backgroundOpacity', value);
+    }
+    
+    function removeBackground() {
+        document.documentElement.style.setProperty('--bg-image', 'none');
+        document.documentElement.style.setProperty('--bg-opacity', '0');
+        
+        // 清除localStorage
+        localStorage.removeItem('backgroundImage');
+        localStorage.removeItem('backgroundOpacity');
+        
+        // 重置表单
+        document.getElementById('backgroundImage').value = '';
+        document.getElementById('backgroundOpacity').value = 50;
+        document.getElementById('opacityValue').textContent = '50%';
+        
+        showToast('背景图片已移除', 'success');
+    }
+    
+    // 页面加载时恢复背景设置
+    function loadBackgroundSettings() {
+        const savedImage = localStorage.getItem('backgroundImage');
+        const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
+        
+        if (savedImage) {
+            document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
+            document.documentElement.style.setProperty('--bg-opacity', savedOpacity / 100);
+            
+            // 更新滑块值
+            document.getElementById('backgroundOpacity').value = savedOpacity;
+            document.getElementById('opacityValue').textContent = savedOpacity + '%';
+        }
+    }
+    
+
+    
+    // 筛选功能
+    function applyFilters() {
+        const platformFilter = document.getElementById('platformFilter').value;
+        const depositFilter = document.getElementById('depositFilter').value;
+        const shippingFilter = document.getElementById('shippingFilter').value;
+        const blankFilter = document.getElementById('blankFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+        
+        const rows = document.querySelectorAll('tbody tr');
+        
+        rows.forEach(row => {
+            let showRow = true;
+            
+            // 平台筛选
+            if (platformFilter) {
+                const contactSelect = row.querySelector('.contact-select');
+                const currentPlatform = contactSelect ? contactSelect.value : '';
+                if (currentPlatform !== platformFilter) {
+                    showRow = false;
+                }
+            }
+            
+            // 定金筛选
+            if (depositFilter && showRow) {
+                const depositSelect = row.querySelector('.deposit-select');
+                const isPaid = depositSelect && depositSelect.value === 'true';
+                if ((depositFilter === 'paid' && !isPaid) || (depositFilter === 'unpaid' && isPaid)) {
+                    showRow = false;
+                }
+            }
+            
+            // 含邮筛选
+            if (shippingFilter && showRow) {
+                const shippingSelect = row.querySelector('.shipping-select');
+                const isIncluded = shippingSelect && shippingSelect.value === 'true';
+                if ((shippingFilter === 'included' && !isIncluded) || (shippingFilter === 'not-included' && isIncluded)) {
+                    showRow = false;
+                }
+            }
+            
+            // 毛坯筛选
+            if (blankFilter && showRow) {
+                const blankSelect = row.querySelector('.blank-select');
+                const isPurchased = blankSelect && blankSelect.value === 'true';
+                if ((blankFilter === 'purchased' && !isPurchased) || (blankFilter === 'unpurchased' && isPurchased)) {
+                    showRow = false;
+                }
+            }
+            
+            // 状态筛选
+            if (statusFilter && showRow) {
+                const statusSelect = row.querySelector('.status-select');
+                const currentStatus = statusSelect ? statusSelect.value : '';
+                if (currentStatus !== statusFilter) {
+                    showRow = false;
+                }
+            }
+            
+            row.style.display = showRow ? '' : 'none';
+        });
+        
+        // 更新显示的订单数量
+        updateFilteredCount();
+        
+        // 更新筛选器颜色
+        updateSelectColors();
+    }
+    
+    function clearFilters() {
+        // 清除所有筛选器的选择
+        document.getElementById('platformFilter').value = '';
+        document.getElementById('depositFilter').value = '';
+        document.getElementById('shippingFilter').value = '';
+        document.getElementById('blankFilter').value = '';
+        document.getElementById('statusFilter').value = '';
+        
+        // 重新应用筛选（显示所有行）
+        applyFilters();
+        
+        // 更新筛选器颜色
+        updateSelectColors();
+    }
+    
+    function updateFilteredCount() {
+        const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
+        const totalRows = document.querySelectorAll('tbody tr');
+        
+        // 可以在这里添加显示筛选结果数量的逻辑
+        console.log(`显示 ${visibleRows.length} / ${totalRows.length} 个订单`);
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        updateBatchDeleteBtn();
+        updateSelectColors();
+        generateCalendar(currentMonth, currentYear);
+        loadBackgroundSettings();
+    });
+</script>
+{% endblock %}

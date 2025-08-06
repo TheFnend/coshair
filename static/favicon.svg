@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 企鹅身体 -->
+  <ellipse cx="32" cy="45" rx="18" ry="15" fill="#2c3e50"/>
+  
+  <!-- 企鹅肚子 -->
+  <ellipse cx="32" cy="45" rx="12" ry="10" fill="#ecf0f1"/>
+  
+  <!-- 企鹅头部 -->
+  <circle cx="32" cy="25" r="15" fill="#2c3e50"/>
+  
+  <!-- 企鹅脸部 -->
+  <ellipse cx="32" cy="28" rx="10" ry="8" fill="#ecf0f1"/>
+  
+  <!-- 企鹅嘴巴 -->
+  <polygon points="32,32 28,36 36,36" fill="#f39c12"/>
+  
+  <!-- 企鹅眼睛 -->
+  <circle cx="28" cy="24" r="3" fill="#2c3e50"/>
+  <circle cx="36" cy="24" r="3" fill="#2c3e50"/>
+  <circle cx="28" cy="23" r="1" fill="#ecf0f1"/>
+  <circle cx="36" cy="23" r="1" fill="#ecf0f1"/>
+  
+  <!-- 企鹅翅膀 -->
+  <ellipse cx="18" cy="40" rx="6" ry="12" fill="#2c3e50" transform="rotate(-20 18 40)"/>
+  <ellipse cx="46" cy="40" rx="6" ry="12" fill="#2c3e50" transform="rotate(20 46 40)"/>
+  
+  <!-- 企鹅脚 -->
+  <ellipse cx="26" cy="58" rx="4" ry="2" fill="#f39c12"/>
+  <ellipse cx="38" cy="58" rx="4" ry="2" fill="#f39c12"/>
+</svg>

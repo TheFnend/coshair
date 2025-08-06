@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}添加订单 - 07妙妙屋{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="bi bi-plus-circle"></i> 添加新订单</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cn" class="form-label">CN (Coser Name) <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="cn" name="cn" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="character" class="form-label">动漫角色 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="character" name="character" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="contact" class="form-label">平台 <span class="text-danger">*</span></label>
+                                <select class="form-select contact-select" id="contact" name="contact" required onchange="updateSelectColors()">
+                                    <option value="">请选择平台</option>
+                                    <option value="QQ"> QQ</option>
+                                    <option value="微信"> 微信</option>
+                                    <option value="闲鱼"> 闲鱼</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="final_amount" class="form-label">尾款金额 <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">¥</span>
+                                    <input type="number" class="form-control" id="final_amount" name="final_amount" step="0.01" min="0" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="needed_date" class="form-label">客户排单 <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="needed_date" name="needed_date" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="order_date" class="form-label">ddl <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="order_date" name="order_date" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="deposit_paid" class="form-label">定金状态</label>
+                                <select class="form-select deposit-select" id="deposit_paid" name="deposit_paid" onchange="updateSelectColors()">
+                                    <option value="false">未付</option>
+                                    <option value="true">已付</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="shipping_included" class="form-label">尾款是否含邮</label>
+                                <select class="form-select shipping-select" id="shipping_included" name="shipping_included" required onchange="updateSelectColors()">
+                                    <option value="false">否</option>
+                                    <option value="true">是</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="blank_purchased" class="form-label">毛坯状态</label>
+                                <select class="form-select blank-select" id="blank_purchased" name="blank_purchased" onchange="updateSelectColors()">
+                                    <option value="false">未购</option>
+                                    <option value="true">已购</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="cake_box" class="form-label">蛋糕盒</label>
+                                <select class="form-select cake-box-select" id="cake_box" name="cake_box" onchange="updateSelectColors()">
+                                    <option value="不需要">不需要</option>
+                                    <option value="需要">需要</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="status" class="form-label">订单状态</label>
+                                <select class="form-select status-select" id="status" name="status" onchange="updateSelectColors()">
+                                    <option value="待制作">待制作</option>
+                                    <option value="制作中">制作中</option>
+                                    <option value="已完成">已完成</option>
+                                    <option value="已发货">已发货</option>
+                                    <option value="已取消">已取消</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> 返回列表
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 添加订单
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 更新下拉框颜色
+function updateSelectColors() {
+    // 定金状态颜色
+    document.querySelectorAll('.deposit-select').forEach(select => {
+        select.classList.remove('paid', 'unpaid');
+        if (select.value === 'true') {
+            select.classList.add('paid');
+        } else {
+            select.classList.add('unpaid');
+        }
+    });
+    
+    // 毛坯状态颜色
+    document.querySelectorAll('.blank-select').forEach(select => {
+        select.classList.remove('purchased', 'unpurchased');
+        if (select.value === 'true') {
+            select.classList.add('purchased');
+        } else {
+            select.classList.add('unpurchased');
+        }
+    });
+    
+    // 邮费状态颜色
+    document.querySelectorAll('.shipping-select').forEach(select => {
+        select.classList.remove('included', 'not-included');
+        if (select.value === 'true') {
+            select.classList.add('included');
+        } else {
+            select.classList.add('not-included');
+        }
+    });
+    
+    // 蛋糕盒状态颜色
+    document.querySelectorAll('.cake-box-select').forEach(select => {
+        select.classList.remove('needed', 'not-needed');
+        if (select.value === '需要') {
+            select.classList.add('needed');
+        } else {
+            select.classList.add('not-needed');
+        }
+    });
+    
+    // 制作状态颜色
+    document.querySelectorAll('.status-select').forEach(select => {
+        select.classList.remove('pending', 'in-progress', 'completed', 'shipped', 'cancelled');
+        switch(select.value) {
+            case '待制作':
+                select.classList.add('pending');
+                break;
+            case '制作中':
+                select.classList.add('in-progress');
+                break;
+            case '已完成':
+                select.classList.add('completed');
+                break;
+            case '已发货':
+                select.classList.add('shipped');
+                break;
+            case '已取消':
+                select.classList.add('cancelled');
+                break;
+        }
+    });
+    
+    // 平台状态颜色
+    document.querySelectorAll('.contact-select').forEach(select => {
+        select.classList.remove('qq', 'wechat', 'xianyu');
+        switch(select.value) {
+            case 'QQ':
+                select.classList.add('qq');
+                break;
+            case '微信':
+                select.classList.add('wechat');
+                break;
+            case '闲鱼':
+                select.classList.add('xianyu');
+                break;
+        }
+    });
+}
+
+// 设置默认日期为今天
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('order_date').value = today;
+    
+    // 设置排单的最小值为今天
+    document.getElementById('needed_date').min = today;
+    
+    // 初始化颜色
+    updateSelectColors();
+});
+
+// 表单验证
+document.querySelector('form').addEventListener('submit', function(e) {
+    const neededDate = new Date(document.getElementById('needed_date').value);
+    const orderDate = new Date(document.getElementById('order_date').value);
+    
+    // if (neededDate < orderDate) {
+    //     e.preventDefault();
+    //     alert('客户排单不能早于ddl！');
+    //     return false;
+    // }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,740 @@
+<!--
+07妙妙屋订单管理系统 - 基础模板
+
+功能说明：
+- 提供统一的页面布局和样式
+- 集成Bootstrap、FontAwesome等UI框架
+- 定义订单紧急程度的视觉样式
+- 包含响应式设计支持
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 页面标题，子模板可以覆盖 -->
+    <title>{% block title %}07妙妙屋{% endblock %}</title>
+    
+    <!-- 自定义图标字体 -->
+    <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet" >
+    
+    <!-- Bootstrap CSS框架 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- FontAwesome图标库 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
+    <link href="/fontawesome-free-7.0.0-web/css/fontawesome.css" rel="stylesheet" />
+    <link href="/fontawesome-free-7.0.0-web/css/brands.css" rel="stylesheet" />
+    <link href="/fontawesome-free-7.0.0-web/css/solid.css" rel="stylesheet" />
+    <link href="/fontawesome-free-7.0.0-web/css/sharp-thin.css" rel="stylesheet" />
+    <link href="/fontawesome-free-7.0.0-web/css/sharp-duotone-thin.css" rel="stylesheet" />
+
+    <!-- 网站图标 -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='头像_耀骑士临光.png') }}">
+    <style>
+        /* ==================== 表格样式 ==================== */
+        
+        /* 表格行背景色 - 斑马线形式 */
+        .table tbody tr {
+            /* background-color: white !important;  默认白色背景 */
+        }
+
+        /* ==================== 图标字体样式 ==================== */
+        
+        /* 普通图标样式 */
+        .iconfont{
+            font-size: 16px;
+            color: #1aad19;
+            text-shadow: none;
+        }
+        
+        /* 大尺寸图标样式（装饰用） */
+        .iconfont.large-icon{
+            font-size: 200px;
+            color: palevioletred;
+            text-shadow: 18px 17px 17px gray;
+        }
+        
+        /* ==================== 订单紧急程度样式 ==================== */
+        
+        /* 紧急订单（3天内）- 黄色系 */
+        .urgent:nth-child(even) {
+            background-color: rgba(255, 243, 205, 0.9) !important;  /* 淡黄色 - 浅 */
+        }
+        
+        .urgent:nth-child(odd) {
+            background-color: rgba(250, 233, 178, 0.9) !important;  /* 淡黄色 - 深 */
+        }
+
+        /* 非常紧急订单（7天内）- 红色系 */
+        .very-urgent:nth-child(even) {
+            background-color: rgba(248,215,218,0.9) !important;  /* 淡红色 - 浅 */
+        }
+        
+        .very-urgent:nth-child(odd) {
+            background-color: rgba(253, 199, 203, 0.9) !important;  /* 淡红色 - 深 */
+        }
+
+        /* ==================== 订单状态样式 ==================== */
+        
+        /* 已完成订单 - 绿色系 */
+        .completed:nth-child(even) {
+            background-color: rgba(212, 237, 218, 0.9) !important;  /* 淡绿色 - 浅 */
+        }
+        
+        .completed:nth-child(odd) {
+            background-color: rgba(186, 223, 186, 0.9) !important;  /* 淡绿色 - 深 */
+        }
+
+        /* 已发货订单 - 蓝色系 */
+        .shipped:nth-child(even) {
+            background-color: rgba(209, 236, 241, 0.9) !important;  /* 淡蓝色 - 浅 */
+        }
+        
+        .shipped:nth-child(odd) {
+            background-color: rgba(178, 217, 224, 0.9) !important;  /* 淡蓝色 - 深 */
+        }
+
+        /* 逾期订单 - 白色背景 */
+        .overdue:nth-child(even) {
+            background-color: rgba(255,255,255,0.8) !important;
+        }
+        
+        .overdue:nth-child(odd) {
+            background-color: rgba(243, 243, 243, 0.8) !important;
+        }
+        
+        /* 排单已过期但未完成/发货的订单 - 深红色背景 */
+        .table tbody tr.expired {
+            background-color: rgba(216, 89, 102, 0.9) !important;
+            color: white !important;
+            background-image: none !important;
+        }
+        
+        /* .table tbody tr.expired:hover {
+            background-color: #c82333 !important;
+            color: white !important;
+            background-image: none !important;
+        } */
+        
+        .table tbody tr.expired td {
+            /* background-color: #dc3545 !important; */
+            color: white !important;
+            background-image: none !important;
+        }
+        
+        /* .table tbody tr.expired select,
+        .table tbody tr.expired input {
+            background-color: rgba(255,255,255,0.9) !important;
+            color: #333 !important;
+        } */
+
+        
+        /* 导航栏样式 */
+        .navbar-brand { font-weight: bold; }
+        .navbar { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        /* 表格样式 */
+        .table th { 
+            background-color: #f8f9fa; 
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0,123,255,0.05);
+        }
+        .table {
+            min-width: auto;
+            width: auto;
+        }
+        .table td, .table th {
+            white-space: nowrap;
+            padding: 0.75rem;
+            vertical-align: middle;
+            text-align: center; /* 表格内容居中显示 */
+        }
+        .table .form-select-sm {
+            min-width: 90px;
+        }
+        
+        /* 表格响应式容器 */
+        .table-container {
+            width: auto; /* 调整表格容器宽度 */
+            max-width: none;
+            overflow-x: auto;
+            margin: 0 auto 2rem auto; /* 居中显示 */
+            padding: 0;
+        }
+        
+        /* 按钮样式 */
+        .btn-group-sm .btn { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        
+        /* 下拉选择框颜色样式 - 动态颜色 */
+        .deposit-select.paid {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+            color: #155724 !important;
+        }
+        .deposit-select.unpaid {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        
+        /* 定金选择框选项颜色 */
+        .deposit-select option[value="true"] {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+        }
+        .deposit-select option[value="false"] {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
+        
+        .blank-select.purchased {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+            color: #155724 !important;
+        }
+        .blank-select.unpurchased {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        
+        /* 毛坯选择框选项颜色 */
+        .blank-select option[value="true"] {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+        }
+        .blank-select option[value="false"] {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
+        
+        /* 平台选择框颜色样式 */
+        .contact-select option[value="QQ"] {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
+        .contact-select option[value="微信"] {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+        }
+        .contact-select option[value="闲鱼"] {
+            background-color: #fff3cd !important;
+            color: #856404 !important;
+        }
+        
+        /* 平台选择框根据选中值的颜色 */
+        .contact-select.qq {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        .contact-select.wechat {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+            color: #155724 !important;
+        }
+        .contact-select.xianyu {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+            color: #856404 !important;
+        }
+        
+        /* Font Awesome图标样式 */
+        .contact-select {
+            font-family: "Font Awesome 6 Brands", "Font Awesome 6 Free", sans-serif;
+        }
+        
+        .shipping-select.included {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+            color: #155724 !important;
+        }
+        .shipping-select.not-included {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        
+        /* 含邮选择框选项颜色 */
+        .shipping-select option[value="true"] {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+        }
+        .shipping-select option[value="false"] {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
+        
+        .status-select.pending {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        .status-select.in-progress {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+            color: #856404 !important;
+        }
+        .status-select.completed {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+            color: #155724 !important;
+        }
+        .status-select.shipped {
+            background-color: #d1ecf1 !important;
+            border-color: #17a2b8 !important;
+            color: #0c5460 !important;
+        }
+        .status-select.cancelled {
+            background-color: #f5c6cb !important;
+            border-color: #dc3545 !important;
+            color: #721c24 !important;
+        }
+        
+        /* 状态选择框选项颜色 */
+        .status-select option[value="待制作"] {
+            background-color: #f8d7da !important;
+            color: #721c24 !important;
+        }
+        .status-select option[value="制作中"] {
+            background-color: #fff3cd !important;
+            color: #856404 !important;
+        }
+        .status-select option[value="已完成"] {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+        }
+        .status-select option[value="已发货"] {
+            background-color: #d1ecf1 !important;
+            color: #0c5460 !important;
+        }
+        .status-select option[value="已取消"] {
+            background-color: #f5c6cb !important;
+            color: #721c24 !important;
+        }
+        
+        /* 蛋糕盒选择框样式 */
+        .cake-box-select.needed {
+            background-color: #fff3cd !important;
+            border-color: #ffc107 !important;
+            color: #856404 !important;
+        }
+        .cake-box-select.not-needed {
+            background-color: #e2e3e5 !important;
+            border-color: #6c757d !important;
+            color: #495057 !important;
+        }
+        
+        .cake-box-select option[value="需要"] {
+            background-color: #fff3cd !important;
+            color: #856404 !important;
+        }
+        .cake-box-select option[value="不需要"] {
+            background-color: #e2e3e5 !important;
+            color: #495057 !important;
+        }
+        
+        /* 页面标题样式 */
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 2rem;
+            color: white;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .header-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+        }
+        
+        .page-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .page-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .header-actions .btn {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        
+        /* 背景设置样式 */
+        body {
+            position: relative;
+            background-attachment: fixed;
+            background-size: cover;
+            background-position: center;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: var(--bg-image, none);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: var(--bg-opacity, 0);
+            z-index: -1;
+            pointer-events: none;
+        }
+        
+        /* 卡片样式优化 */
+        .card {
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(10px);
+        }
+        .card-body {
+            padding: 1.5rem;
+        }
+        
+        /* 统计卡片样式 */
+        .stats-card {
+            transition: transform 0.2s ease-in-out;
+            border: none;
+            overflow: hidden;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* 渐变卡片样式 - 根据提供的RGB配色 */
+        .gradient-card-blue {
+            background: rgba(78, 171, 144, 0.8);
+            color: white;
+        }
+        
+        .gradient-card-green {
+            background: rgba(142, 162, 156, 0.8);
+            color: white;
+        }
+        
+        .gradient-card-orange {
+            background: rgba(237, 221, 195, 0.8);
+            color: #333;
+        }
+        
+        .gradient-card-purple {
+            background: rgba(238, 191, 109, 0.8);
+            color: white;
+        }
+        
+        .gradient-card-yellow {
+            background: rgba(217, 79, 51, 0.8);
+            color: white;
+        }
+        
+        .gradient-card-teal {
+            background: rgba(175, 101, 94, 0.8);
+            color: white;
+        }
+        
+        .stats-icon {
+            font-size: 2.5rem;
+            opacity: 0.9;
+        }
+        
+        .stats-content h4 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stats-content p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 0;
+        }
+        
+        /* 表格容器样式 */
+        .table-responsive {
+            width: 200%;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* 按钮样式优化 */
+        .btn {
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        /* 图例样式 */
+        .legend-item {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            margin: 0.25rem;
+            border-radius: 15px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            font-size: 20px;
+            white-space: nowrap;
+        }
+
+        /* 修改待制作状态颜色 */
+        .legend-item-wait {
+            background-color: #d4e9a6 !important;
+            color: #333 !important;
+            
+        }
+
+        /* 修改逾期状态颜色 */
+        .legend-item-overdue {
+            background-color: #ee1f30 !important;
+            color: #fff !important;
+        }
+
+        /* 修改紧急状态颜色 */
+        .legend-item-very-urgent {
+            background-color: #cf6e76 !important;
+            color: #fff !important;
+        }
+
+        /* 修改较急状态颜色 */
+        .legend-item-urgent {
+            background-color: #ddbd55 !important;
+            color: #fff !important;
+        }
+
+        /* 修改已完成状态颜色 */
+        .legend-item-completed {
+            background-color: #90dfec !important;
+            color: #333 !important;
+        }
+        
+        /* 日历样式 */
+        .calendar-grid {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            background-color: #f8f9fa;
+        }
+        
+        .calendar-weekday {
+            padding: 0.75rem;
+            text-align: center;
+            font-weight: 600;
+            border-right: 1px solid #dee2e6;
+            color: #6c757d;
+        }
+        
+        .calendar-weekday:last-child {
+            border-right: none;
+        }
+        
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+        
+        .calendar-day {
+            min-height: 100px;
+            padding: 0.5rem;
+            border-right: 1px solid #dee2e6;
+            border-bottom: 1px solid #dee2e6;
+            background-color: #fff;
+            position: relative;
+        }
+        
+        .calendar-day:last-child {
+            border-right: none;
+        }
+        
+        .calendar-day.other-month {
+            background-color: #f8f9fa;
+            color: #adb5bd;
+        }
+        
+        .calendar-day.today {
+            background-color: #e3f2fd;
+            border: 2px solid #2196f3;
+        }
+        
+        .calendar-day-number {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .calendar-event {
+            background-color: #c7e686;
+            color: #333;
+            padding: 0.125rem 0.25rem;
+            border-radius: 3px;
+            font-size: 0.9rem;
+            margin-bottom: 0.125rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .calendar-event.urgent {
+            color: #fff;
+            background-color: #ddbd55 !important;  /* 更深的橙色 */
+            animation: pulse 1.5s infinite;
+            font-size: 1rem !important;  /* 进一步增大字体 */
+            font-weight: 600 !important;    /* 加粗字体 */
+        }
+        
+        .calendar-event.very-urgent {
+            color: #fff;
+            background-color: #cf6e76 !important;  /* 更深的红色 */
+            animation: pulse 1.5s infinite;
+            font-size: 1.2rem !important;  /* 进一步增大字体 */
+            font-weight: 600 !important;    /* 加粗字体 */
+        }
+
+        .calendar-event.overdue {
+            color: #fff;
+            background-color: #ee1f30 !important;  
+            animation: pulse 1.5s infinite;
+            font-size: 1.4rem !important;  /* 进一步增大字体 */
+            font-weight: 900 !important;    /* 加粗字体 */
+        }
+
+        .calendar-event.completed {
+            background-color: #90dfec !important; 
+            text-decoration: line-through;  /* 添加中划线 */
+            text-decoration-line: line-through;      /* 中划线 */
+            text-decoration-color: #000000;          /* 自定义颜色 */
+            text-decoration-thickness: 3px;          /* 自定义粗细 */   
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        /* UI优化 - 圆角效果 */
+        .card {
+            border-radius: 12px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .table-container {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .form-select {
+            border-radius: 8px !important;
+        }
+        
+        .btn {
+            border-radius: 8px !important;
+        }
+        
+        .btn-group .btn {
+            border-radius: 0 !important;
+        }
+        
+        .btn-group .btn:first-child {
+            border-top-left-radius: 8px !important;
+            border-bottom-left-radius: 8px !important;
+        }
+        
+        .btn-group .btn:last-child {
+            border-top-right-radius: 8px !important;
+            border-bottom-right-radius: 8px !important;
+        }
+        
+        .table {
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .table thead th {
+            border-top: none;
+            background-color: rgba(248, 249, 250, 0.8); /* 原色彩 + 80% 透明度 */
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+            backdrop-filter: blur(5px); /* 可选：添加模糊效果 */
+        }
+        
+        /* 响应式优化 */
+        @media (max-width: 768px) {
+            .table-responsive {
+                font-size: 0.875rem;
+            }
+            .form-select-sm {
+                font-size: 0.75rem;
+            }
+            .calendar-day {
+                min-height: 80px;
+                padding: 0.25rem;
+            }
+            .calendar-event {
+                font-size: 0.625rem;
+            }
+        }
+
+        
+        
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand text-dark" href="{{ url_for('index') }}">
+                <i class="bi bi-scissors"></i> 假毛管理系统
+            </a>
+        <div class="navbar-nav me-auto">
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleBackgroundSettings()">
+                <i class="bi bi-image"></i> 背景设置
+            </button>
+        </div>
+        <div class="navbar-nav ms-auto">
+            <a class="btn btn-outline-primary me-2" href="{{ url_for('index') }}">订单列表</a>
+            <a class="btn btn-primary" href="{{ url_for('add_order') }}">添加订单</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4 px-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
