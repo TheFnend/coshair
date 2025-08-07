@@ -90,9 +90,9 @@ def index():
     # 构建数据库查询
     query = Order.query
     
-    # 根据参数筛选订单
-    if not show_completed:
-        query = query.filter(Order.status.notin_(['已完成', '已发货']))
+    # 注释掉后端筛选，改为前端控制
+    # if not show_completed:
+    #     query = query.filter(Order.status.notin_(['已完成', '已发货']))
     
     # 平台筛选
     if platform_filter:

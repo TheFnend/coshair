@@ -400,9 +400,15 @@
 // 切换已完成订单显示
 function toggleCompleted() {
     const checkbox = document.getElementById('showCompleted');
-    const currentUrl = new URL(window.location);
-    currentUrl.searchParams.set('show_completed', checkbox.checked);
-    window.location.href = currentUrl.toString();
+    const completedRows = document.querySelectorAll('tr.completed, tr.shipped');
+    
+    completedRows.forEach(row => {
+        if (checkbox.checked) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
 }
 
 // 全选/取消全选
@@ -960,6 +966,14 @@ function updateSelectColors() {
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
         updateBatchDeleteBtn();
+        // 初始化已完成订单的显示状态
+        const checkbox = document.getElementById('showCompleted');
+        // 如果URL中没有show_completed参数，默认隐藏已完成订单
+        const urlParams = new URLSearchParams(window.location.search);
+        if (!urlParams.has('show_completed')) {
+            checkbox.checked = false;
+        }
+        toggleCompleted();
         updateSelectColors();
         generateCalendar(currentMonth, currentYear);
         loadBackgroundSettings();
