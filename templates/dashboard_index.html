@@ -9,9 +9,11 @@
 5. 订单列表表格 - 显示所有订单详细信息
 6. 批量操作 - 支持批量删除等操作
 -->
-{% extends "base.html" %}
+{% extends "dashboard_base.html" %}
 
 {% block title %}订单列表 - 07妙妙屋{% endblock %}
+
+{% block page_title %}订单列表{% endblock %}
 
 {% block content %}
 
@@ -376,607 +378,535 @@
 </div>
 
 <div class="mt-4">
-    <div class="card">
-    </div>
 </div>
-<div class="mt-4">
-    <div class="card">
-    </div>
-</div>
-<div class="mt-4">
-    <div class="card">
-    </div>
-</div>
-<div class="mt-4">
-    <div class="card">
-    </div>
-</div>
-
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 切换已完成订单显示
-function toggleCompleted() {
-    const checkbox = document.getElementById('showCompleted');
-    const completedRows = document.querySelectorAll('tr.completed, tr.shipped');
+// 全局变量
+let currentDate = new Date();
+let batchMode = false;
+let orders = {{ orders_json|safe }};
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectColors();
+    generateCalendar();
+    updateCalendarMonthCount();
     
-    completedRows.forEach(row => {
-        if (checkbox.checked) {
-            row.style.display = '';
+    // 初始化已完成订单的显示状态
+    const showCompleted = document.getElementById('showCompleted').checked;
+    toggleCompletedOrders(showCompleted);
+});
+
+// ==================== 背景设置功能 ====================
+
+// 切换背景设置面板显示
+function toggleBackgroundSettings() {
+    const panel = document.getElementById('backgroundSettings');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+// 处理背景图片上传
+function handleBackgroundUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const imageUrl = e.target.result;
+            setBackgroundImage(imageUrl);
+            // 保存到localStorage
+            localStorage.setItem('backgroundImage', imageUrl);
+            localStorage.setItem('backgroundOpacity', document.getElementById('backgroundOpacity').value);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+// 设置背景图片
+function setBackgroundImage(imageUrl) {
+    const opacity = document.getElementById('backgroundOpacity').value / 100;
+    document.body.style.backgroundImage = `url(${imageUrl})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundRepeat = 'no-repeat';
+    document.body.style.backgroundAttachment = 'fixed';
+    
+    // 添加半透明遮罩
+    let overlay = document.querySelector('.background-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'background-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, ${1 - opacity});
+            pointer-events: none;
+            z-index: -1;
+        `;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.style.background = `rgba(255, 255, 255, ${1 - opacity})`;
+    }
+}
+
+// 更新背景透明度
+function updateBackgroundOpacity(value) {
+    document.getElementById('opacityValue').textContent = value + '%';
+    const overlay = document.querySelector('.background-overlay');
+    if (overlay) {
+        overlay.style.background = `rgba(255, 255, 255, ${1 - value / 100})`;
+    }
+    // 保存到localStorage
+    localStorage.setItem('backgroundOpacity', value);
+}
+
+// 移除背景
+function removeBackground() {
+    document.body.style.backgroundImage = 'none';
+    const overlay = document.querySelector('.background-overlay');
+    if (overlay) {
+        overlay.remove();
+    }
+    // 清除localStorage
+    localStorage.removeItem('backgroundImage');
+    localStorage.removeItem('backgroundOpacity');
+    // 重置文件输入
+    document.getElementById('backgroundImage').value = '';
+}
+
+// 页面加载时恢复背景设置
+window.addEventListener('load', function() {
+    const savedImage = localStorage.getItem('backgroundImage');
+    const savedOpacity = localStorage.getItem('backgroundOpacity');
+    
+    if (savedImage) {
+        setBackgroundImage(savedImage);
+        if (savedOpacity) {
+            document.getElementById('backgroundOpacity').value = savedOpacity;
+            document.getElementById('opacityValue').textContent = savedOpacity + '%';
+        }
+    }
+});
+
+// ==================== 订单管理功能 ====================
+
+// 更新订单字段
+function updateOrderField(orderId, field, value) {
+    fetch(`/api/update_order/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            field: field,
+            value: value
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('订单更新成功');
+            // 更新本地orders数据
+            const order = orders.find(o => o.id === orderId);
+            if (order) {
+                order[field] = value;
+            }
         } else {
-            row.style.display = 'none';
+            alert('更新失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('更新失败');
+    });
+}
+
+// 更新选择框颜色
+function updateSelectColors() {
+    // 平台选择框颜色
+    document.querySelectorAll('.contact-select').forEach(select => {
+        select.className = 'form-select form-select-sm contact-select';
+        if (select.value === 'QQ') {
+            select.classList.add('contact-qq');
+        } else if (select.value === '微信') {
+            select.classList.add('contact-wechat');
+        } else if (select.value === '闲鱼') {
+            select.classList.add('contact-xianyu');
         }
     });
+    
+    // 定金状态颜色
+    document.querySelectorAll('.deposit-select').forEach(select => {
+        select.className = 'form-select form-select-sm deposit-select';
+        if (select.value === 'true') {
+            select.classList.add('deposit-paid');
+        } else {
+            select.classList.add('deposit-unpaid');
+        }
+    });
+    
+    // 含邮状态颜色
+    document.querySelectorAll('.shipping-select').forEach(select => {
+        select.className = 'form-select form-select-sm shipping-select';
+        if (select.value === 'true') {
+            select.classList.add('shipping-included');
+        } else {
+            select.classList.add('shipping-not-included');
+        }
+    });
+    
+    // 毛坯状态颜色
+    document.querySelectorAll('.blank-select').forEach(select => {
+        select.className = 'form-select form-select-sm blank-select';
+        if (select.value === 'true') {
+            select.classList.add('blank-purchased');
+        } else {
+            select.classList.add('blank-unpurchased');
+        }
+    });
+    
+    // 蛋糕盒状态颜色
+    document.querySelectorAll('.cake-box-select').forEach(select => {
+        select.className = 'form-select form-select-sm cake-box-select';
+        if (select.value === '需要') {
+            select.classList.add('cake-box-needed');
+        } else {
+            select.classList.add('cake-box-not-needed');
+        }
+    });
+    
+    // 订单状态颜色
+    document.querySelectorAll('.status-select').forEach(select => {
+        select.className = 'form-select form-select-sm status-select';
+        if (select.value === '待制作') {
+            select.classList.add('status-pending');
+        } else if (select.value === '制作中') {
+            select.classList.add('status-in-progress');
+        } else if (select.value === '已完成') {
+            select.classList.add('status-completed');
+        } else if (select.value === '已发货') {
+            select.classList.add('status-shipped');
+        } else if (select.value === '已取消') {
+            select.classList.add('status-cancelled');
+        }
+    });
+}
+
+// ==================== 筛选功能 ====================
+
+// 应用筛选
+function applyFilters() {
+    const platformFilter = document.getElementById('platformFilter').value;
+    const depositFilter = document.getElementById('depositFilter').value;
+    const shippingFilter = document.getElementById('shippingFilter').value;
+    const blankFilter = document.getElementById('blankFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // 平台筛选
+        if (platformFilter) {
+            const contactSelect = row.querySelector('.contact-select');
+            if (contactSelect && contactSelect.value !== platformFilter) {
+                show = false;
+            }
+        }
+        
+        // 定金状态筛选
+        if (depositFilter) {
+            const depositSelect = row.querySelector('.deposit-select');
+            if (depositSelect) {
+                const isPaid = depositSelect.value === 'true';
+                if ((depositFilter === 'paid' && !isPaid) || (depositFilter === 'unpaid' && isPaid)) {
+                    show = false;
+                }
+            }
+        }
+        
+        // 含邮状态筛选
+        if (shippingFilter) {
+            const shippingSelect = row.querySelector('.shipping-select');
+            if (shippingSelect) {
+                const isIncluded = shippingSelect.value === 'true';
+                if ((shippingFilter === 'included' && !isIncluded) || (shippingFilter === 'not-included' && isIncluded)) {
+                    show = false;
+                }
+            }
+        }
+        
+        // 毛坯状态筛选
+        if (blankFilter) {
+            const blankSelect = row.querySelector('.blank-select');
+            if (blankSelect) {
+                const isPurchased = blankSelect.value === 'true';
+                if ((blankFilter === 'purchased' && !isPurchased) || (blankFilter === 'unpurchased' && isPurchased)) {
+                    show = false;
+                }
+            }
+        }
+        
+        // 订单状态筛选
+        if (statusFilter) {
+            const statusSelect = row.querySelector('.status-select');
+            if (statusSelect && statusSelect.value !== statusFilter) {
+                show = false;
+            }
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// 清除筛选
+function clearFilters() {
+    document.getElementById('platformFilter').value = '';
+    document.getElementById('depositFilter').value = '';
+    document.getElementById('shippingFilter').value = '';
+    document.getElementById('blankFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    
+    // 显示所有行
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        row.style.display = '';
+    });
+}
+
+// 切换已完成订单显示
+function toggleCompleted() {
+    const showCompleted = document.getElementById('showCompleted').checked;
+    toggleCompletedOrders(showCompleted);
+    
+    // 更新URL参数
+    const url = new URL(window.location);
+    if (showCompleted) {
+        url.searchParams.set('show_completed', 'true');
+    } else {
+        url.searchParams.delete('show_completed');
+    }
+    window.history.replaceState({}, '', url);
+}
+
+// 切换已完成订单显示状态
+function toggleCompletedOrders(show) {
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        if (row.classList.contains('completed') || row.classList.contains('shipped')) {
+            row.style.display = show ? '' : 'none';
+        }
+    });
+}
+
+// ==================== 批量操作功能 ====================
+
+// 切换批量模式
+function toggleBatchMode() {
+    batchMode = !batchMode;
+    const checkboxColumns = document.querySelectorAll('.checkbox-column');
+    const toggleBtn = document.getElementById('toggleBatchModeBtn');
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    const cancelBtn = document.getElementById('cancelBatchModeBtn');
+    
+    if (batchMode) {
+        checkboxColumns.forEach(col => col.style.display = 'table-cell');
+        toggleBtn.style.display = 'none';
+        batchDeleteBtn.style.display = 'inline-block';
+        cancelBtn.style.display = 'inline-block';
+    } else {
+        checkboxColumns.forEach(col => col.style.display = 'none');
+        toggleBtn.style.display = 'inline-block';
+        batchDeleteBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        // 清除所有选择
+        document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('selectAll').checked = false;
+    }
+}
+
+// 取消批量模式
+function cancelBatchMode() {
+    batchMode = false;
+    toggleBatchMode();
 }
 
 // 全选/取消全选
 function toggleSelectAll() {
     const selectAll = document.getElementById('selectAll');
     const checkboxes = document.querySelectorAll('.order-checkbox');
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
+    
+    checkboxes.forEach(cb => {
+        // 只选择可见的行
+        const row = cb.closest('tr');
+        if (row.style.display !== 'none') {
+            cb.checked = selectAll.checked;
+        }
     });
+    
     updateBatchDeleteBtn();
 }
 
-// 切换批量模式
-function toggleBatchMode() {
-    const checkboxColumns = document.querySelectorAll('.checkbox-column');
-    const toggleBtn = document.getElementById('toggleBatchModeBtn');
-    const cancelBtn = document.getElementById('cancelBatchModeBtn');
-    
-    checkboxColumns.forEach(col => {
-        col.style.display = 'table-cell';
-    });
-    
-    toggleBtn.style.display = 'none';
-    cancelBtn.style.display = 'inline-block';
-}
-
-// 取消批量模式
-function cancelBatchMode() {
-    const checkboxColumns = document.querySelectorAll('.checkbox-column');
-    const checkboxes = document.querySelectorAll('.order-checkbox');
-    const selectAll = document.getElementById('selectAll');
-    const toggleBtn = document.getElementById('toggleBatchModeBtn');
-    const cancelBtn = document.getElementById('cancelBatchModeBtn');
-    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-    
-    // 隐藏复选框列
-    checkboxColumns.forEach(col => {
-        col.style.display = 'none';
-    });
-    
-    // 取消所有选中状态
-    checkboxes.forEach(cb => cb.checked = false);
-    selectAll.checked = false;
-    
-    // 切换按钮显示状态
-    toggleBtn.style.display = 'inline-block';
-    cancelBtn.style.display = 'none';
-    batchDeleteBtn.style.display = 'none';
-}
-
-// 更新批量删除按钮显示状态
+// 更新批量删除按钮状态
 function updateBatchDeleteBtn() {
     const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
     const batchDeleteBtn = document.getElementById('batchDeleteBtn');
     
     if (checkedBoxes.length > 0) {
-        batchDeleteBtn.style.display = 'inline-block';
-        batchDeleteBtn.innerHTML = `<i class="bi bi-trash"></i> 批量删除 (${checkedBoxes.length})`;
+        batchDeleteBtn.textContent = `批量删除 (${checkedBoxes.length})`;
+        batchDeleteBtn.disabled = false;
     } else {
-        batchDeleteBtn.style.display = 'none';
+        batchDeleteBtn.textContent = '批量删除';
+        batchDeleteBtn.disabled = true;
     }
-}
-
-// 快速更新订单字段
-function updateOrderField(orderId, field, value) {
-    const data = {};
-    data[field] = value;
-    
-    fetch(`/api/update_order/${orderId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 更新下拉框颜色
-            updateSelectColors();
-            // 显示成功提示
-            showToast('更新成功', 'success');
-            // 如果状态改为已完成且当前不显示已完成订单，则刷新页面
-            if (field === 'status' && (value === '已完成' || value === '已发货') && !{{ show_completed|lower }}) {
-                setTimeout(() => location.reload(), 1000);
-            }
-        } else {
-            showToast('更新失败: ' + data.message, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('网络错误', 'error');
-    });
 }
 
 // 批量删除
 function batchDelete() {
     const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
-    const orderIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
-    
-    if (orderIds.length === 0) {
+    if (checkedBoxes.length === 0) {
         alert('请选择要删除的订单');
         return;
     }
     
-    if (!confirm(`确定要删除选中的 ${orderIds.length} 个订单吗？此操作不可恢复！`)) {
+    if (!confirm(`确定要删除选中的 ${checkedBoxes.length} 个订单吗？`)) {
         return;
     }
+    
+    const orderIds = Array.from(checkedBoxes).map(cb => cb.value);
     
     fetch('/api/batch_delete', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ order_ids: orderIds })
+        body: JSON.stringify({
+            order_ids: orderIds
+        })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 1000);
+            alert(data.message);
+            location.reload();
         } else {
-            showToast('删除失败: ' + data.message, 'error');
+            alert('删除失败: ' + data.message);
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        showToast('网络错误', 'error');
+        alert('删除失败');
     });
 }
 
-// 显示提示消息
-function showToast(message, type) {
-    // 创建提示元素
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    toast.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // 3秒后自动移除
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
-        }
-    }, 3000);
-}
+// ==================== 日历功能 ====================
 
-// 更新下拉框颜色
-function updateSelectColors() {
-    // 定金状态颜色
-    document.querySelectorAll('.deposit-select').forEach(select => {
-        select.classList.remove('paid', 'unpaid');
-        if (select.value === 'true') {
-            select.classList.add('paid');
-        } else {
-            select.classList.add('unpaid');
-        }
-    });
+// 生成日历
+function generateCalendar() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
     
-    // 毛坯状态颜色
-    document.querySelectorAll('.blank-select').forEach(select => {
-        select.classList.remove('purchased', 'unpurchased');
-        if (select.value === 'true') {
-            select.classList.add('purchased');
-        } else {
-            select.classList.add('unpurchased');
-        }
-    });
+    // 更新月份年份显示
+    const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月',
+                       '七月', '八月', '九月', '十月', '十一月', '十二月'];
+    document.getElementById('calendar-month-year').textContent = `${year}年 ${monthNames[month]}`;
     
-    // 邮费状态颜色
-    document.querySelectorAll('.shipping-select').forEach(select => {
-        select.classList.remove('included', 'not-included');
-        if (select.value === 'true') {
-            select.classList.add('included');
-        } else {
-            select.classList.add('not-included');
-        }
-    });
+    // 获取当月第一天和最后一天
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay()); // 从周日开始
     
-    // 蛋糕盒状态颜色
-    document.querySelectorAll('.cake-box-select').forEach(select => {
-        select.classList.remove('needed', 'not-needed');
-        if (select.value === '需要') {
-            select.classList.add('needed');
-        } else {
-            select.classList.add('not-needed');
-        }
-    });
+    const calendarDays = document.getElementById('calendar-days');
+    calendarDays.innerHTML = '';
     
-    // 制作状态颜色
-    document.querySelectorAll('.status-select').forEach(select => {
-        select.classList.remove('pending', 'in-progress', 'completed', 'shipped', 'cancelled');
-        switch(select.value) {
-            case '待制作':
-                select.classList.add('pending');
-                break;
-            case '制作中':
-                select.classList.add('in-progress');
-                break;
-            case '已完成':
-                select.classList.add('completed');
-                break;
-            case '已发货':
-                select.classList.add('shipped');
-                break;
-            case '已取消':
-                select.classList.add('cancelled');
-                break;
-        }
-    });
-    
-    // 平台状态颜色
-    document.querySelectorAll('.contact-select').forEach(select => {
-        select.classList.remove('qq', 'wechat', 'xianyu');
-        switch(select.value) {
-            case 'QQ':
-                select.classList.add('qq');
-                break;
-            case '微信':
-                select.classList.add('wechat');
-                break;
-            case '闲鱼':
-                select.classList.add('xianyu');
-                break;
-        }
-    });
-    
-    // 确保筛选器下拉框也有颜色
-    const platformFilter = document.getElementById('platformFilter');
-    if (platformFilter) {
-        platformFilter.classList.remove('qq', 'wechat', 'xianyu');
-        switch(platformFilter.value) {
-            case 'QQ':
-                platformFilter.classList.add('qq');
-                break;
-            case '微信':
-                platformFilter.classList.add('wechat');
-                break;
-            case '闲鱼':
-                platformFilter.classList.add('xianyu');
-                break;
+    // 生成6周的日期
+    for (let week = 0; week < 6; week++) {
+        for (let day = 0; day < 7; day++) {
+            const currentDay = new Date(startDate);
+            currentDay.setDate(startDate.getDate() + week * 7 + day);
+            
+            const dayElement = document.createElement('div');
+            dayElement.className = 'calendar-day';
+            
+            // 判断是否是当前月份
+            if (currentDay.getMonth() !== month) {
+                dayElement.classList.add('other-month');
+            }
+            
+            // 判断是否是今天
+            const today = new Date();
+            if (currentDay.toDateString() === today.toDateString()) {
+                dayElement.classList.add('today');
+            }
+            
+            // 查找当天的订单
+            const dayOrders = orders.filter(order => {
+                const orderDate = new Date(order.needed_date);
+                return orderDate.toDateString() === currentDay.toDateString();
+            });
+            
+            // 设置日期内容
+            let dayContent = `<div class="calendar-date">${currentDay.getDate()}</div>`;
+            
+            if (dayOrders.length > 0) {
+                dayContent += '<div class="calendar-orders">';
+                dayOrders.forEach(order => {
+                    const today = new Date();
+                    const orderDate = new Date(order.needed_date);
+                    const daysLeft = Math.ceil((orderDate - today) / (1000 * 60 * 60 * 24));
+                    
+                    let urgencyClass = 'normal';
+                    if (order.status === '已完成' || order.status === '已发货') {
+                        urgencyClass = 'completed';
+                    } else if (daysLeft < 0) {
+                        urgencyClass = 'overdue';
+                    } else if (daysLeft <= 3) {
+                        urgencyClass = 'very-urgent';
+                    } else if (daysLeft <= 7) {
+                        urgencyClass = 'urgent';
+                    }
+                    
+                    dayContent += `<div class="calendar-order ${urgencyClass}" onclick="editOrder(${order.id})">${order.cn}</div>`;
+                });
+                dayContent += '</div>';
+            }
+            
+            dayElement.innerHTML = dayContent;
+            calendarDays.appendChild(dayElement);
         }
     }
 }
 
-// 日历相关变量和函数
-    let currentDate = new Date();
-    let currentMonth = currentDate.getMonth();
-    let currentYear = currentDate.getFullYear();
-    
-    // 订单数据（从后端传递）
-    const orders = {{ orders_json | tojson | safe }};
-    
-    // 月份名称
-    const monthNames = [
-        '一月', '二月', '三月', '四月', '五月', '六月',
-        '七月', '八月', '九月', '十月', '十一月', '十二月'
-    ];
-    
-    // 生成日历
-    function generateCalendar(month, year) {
-        const firstDay = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const daysInPrevMonth = new Date(year, month, 0).getDate();
-        
-        const calendarDays = document.getElementById('calendar-days');
-        const monthYear = document.getElementById('calendar-month-year');
-        const monthCount = document.getElementById('calendar-month-count');
-        
-        monthYear.textContent = `${monthNames[month]} ${year}`;
-        calendarDays.innerHTML = '';
-        
-        // 计算该月订单总数
-        const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const monthEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
-        const monthOrders = orders.filter(order => {
-            const neededDate = order.needed_date.split(' ')[0];
-            return neededDate >= monthStart && neededDate <= monthEnd;
-        });
-        monthCount.innerHTML = `<i class="bi bi-calendar-check"></i> ${monthNames[month]}：${monthOrders.length}个订单`;
-        
-        // 添加上个月的日期
-        for (let i = firstDay - 1; i >= 0; i--) {
-            const dayDiv = createDayElement(daysInPrevMonth - i, true, month - 1, year);
-            calendarDays.appendChild(dayDiv);
-        }
-        
-        // 添加当前月的日期
-        for (let day = 1; day <= daysInMonth; day++) {
-            const dayDiv = createDayElement(day, false, month, year);
-            calendarDays.appendChild(dayDiv);
-        }
-        
-        // 添加下个月的日期以填满网格
-        const totalCells = calendarDays.children.length;
-        const remainingCells = 42 - totalCells; // 6行 x 7列
-        for (let day = 1; day <= remainingCells; day++) {
-            const dayDiv = createDayElement(day, true, month + 1, year);
-            calendarDays.appendChild(dayDiv);
-        }
-    }
-    
-    // 创建日期元素
-    function createDayElement(day, isOtherMonth, month, year) {
-        const dayDiv = document.createElement('div');
-        dayDiv.className = 'calendar-day';
-        
-        if (isOtherMonth) {
-            dayDiv.classList.add('other-month');
-        }
-        
-        // 检查是否是今天
-        const today = new Date();
-        if (!isOtherMonth && day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
-            dayDiv.classList.add('today');
-        }
-        
-        // 添加日期数字
-        const dayNumber = document.createElement('div');
-        dayNumber.className = 'calendar-day-number';
-        dayNumber.textContent = day;
-        dayDiv.appendChild(dayNumber);
-        
-        // 查找该日期的订单（包括跨月日期）
-        let actualMonth = month;
-        let actualYear = year;
-        
-        // 处理跨年情况
-        if (actualMonth < 0) {
-            actualMonth = 11;
-            actualYear = year - 1;
-        } else if (actualMonth > 11) {
-            actualMonth = 0;
-            actualYear = year + 1;
-        }
-        
-        const dateStr = `${actualYear}-${String(actualMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayOrders = orders.filter(order => {
-            const neededDate = order.needed_date.split(' ')[0]; // 只取日期部分
-            return neededDate === dateStr;
-        });
-            
-            // 添加订单事件
-        dayOrders.forEach(order => {
-            const eventDiv = document.createElement('div');
-            eventDiv.className = 'calendar-event';
-            
-            // 计算紧急程度
-            const neededDate = new Date(order.needed_date);
-            const diffTime = neededDate - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays <= 3 && diffDays >= 0) {
-                eventDiv.classList.add('very-urgent');
-            } else if (diffDays <= 7 && diffDays >= 0) {
-                eventDiv.classList.add('urgent');
-            } else if (diffDays < 0  && !['已完成', '已发货'].includes(order.status)) {
-                eventDiv.classList.add('overdue');
-            } else if (order.status == '已完成' || order.status == '已发货') {
-                eventDiv.classList.add('completed');
-            }
-            eventDiv.textContent = `${order.cn} - ${order.character}`;
-            eventDiv.title = `客户: ${order.cn}\n角色: ${order.character}\n联系方式: ${order.contact}\n状态: ${order.status}`;
-            dayDiv.appendChild(eventDiv);
-        });
-        
-        return dayDiv;
-    }
-    
-    // 切换月份
-    function changeMonth(direction) {
-        currentMonth += direction;
-        if (currentMonth > 11) {
-            currentMonth = 0;
-            currentYear++;
-        } else if (currentMonth < 0) {
-            currentMonth = 11;
-            currentYear--;
-        }
-        generateCalendar(currentMonth, currentYear);
-    }
-    
-    // 背景设置相关函数
-    function toggleBackgroundSettings() {
-        const panel = document.getElementById('backgroundSettings');
-        if (panel.style.display === 'none') {
-            panel.style.display = 'block';
-        } else {
-            panel.style.display = 'none';
-        }
-    }
-    
-    function handleBackgroundUpload(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const imageUrl = e.target.result;
-                document.documentElement.style.setProperty('--bg-image', `url(${imageUrl})`);
-                document.documentElement.style.setProperty('--bg-opacity', '0.5');
-                
-                // 保存到localStorage
-                localStorage.setItem('backgroundImage', imageUrl);
-                localStorage.setItem('backgroundOpacity', '50');
-                
-                // 更新滑块值
-                document.getElementById('backgroundOpacity').value = 50;
-                document.getElementById('opacityValue').textContent = '50%';
-                
-                showToast('背景图片已设置', 'success');
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-    
-    function updateBackgroundOpacity(value) {
-        const opacity = value / 100;
-        document.documentElement.style.setProperty('--bg-opacity', opacity);
-        document.getElementById('opacityValue').textContent = value + '%';
-        
-        // 保存到localStorage
-        localStorage.setItem('backgroundOpacity', value);
-    }
-    
-    function removeBackground() {
-        document.documentElement.style.setProperty('--bg-image', 'none');
-        document.documentElement.style.setProperty('--bg-opacity', '0');
-        
-        // 清除localStorage
-        localStorage.removeItem('backgroundImage');
-        localStorage.removeItem('backgroundOpacity');
-        
-        // 重置表单
-        document.getElementById('backgroundImage').value = '';
-        document.getElementById('backgroundOpacity').value = 50;
-        document.getElementById('opacityValue').textContent = '50%';
-        
-        showToast('背景图片已移除', 'success');
-    }
-    
-    // 页面加载时恢复背景设置
-    function loadBackgroundSettings() {
-        const savedImage = localStorage.getItem('backgroundImage');
-        const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
-        
-        if (savedImage) {
-            document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
-            document.documentElement.style.setProperty('--bg-opacity', savedOpacity / 100);
-            
-            // 更新滑块值
-            document.getElementById('backgroundOpacity').value = savedOpacity;
-            document.getElementById('opacityValue').textContent = savedOpacity + '%';
-        }
-    }
-    
+// 切换月份
+function changeMonth(delta) {
+    currentDate.setMonth(currentDate.getMonth() + delta);
+    generateCalendar();
+    updateCalendarMonthCount();
+}
 
+// 更新日历月份订单数量
+function updateCalendarMonthCount() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
     
-    // 筛选功能
-    function applyFilters() {
-        const platformFilter = document.getElementById('platformFilter').value;
-        const depositFilter = document.getElementById('depositFilter').value;
-        const shippingFilter = document.getElementById('shippingFilter').value;
-        const blankFilter = document.getElementById('blankFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
-        
-        const rows = document.querySelectorAll('tbody tr');
-        
-        rows.forEach(row => {
-            let showRow = true;
-            
-            // 平台筛选
-            if (platformFilter) {
-                const contactSelect = row.querySelector('.contact-select');
-                const currentPlatform = contactSelect ? contactSelect.value : '';
-                if (currentPlatform !== platformFilter) {
-                    showRow = false;
-                }
-            }
-            
-            // 定金筛选
-            if (depositFilter && showRow) {
-                const depositSelect = row.querySelector('.deposit-select');
-                const isPaid = depositSelect && depositSelect.value === 'true';
-                if ((depositFilter === 'paid' && !isPaid) || (depositFilter === 'unpaid' && isPaid)) {
-                    showRow = false;
-                }
-            }
-            
-            // 含邮筛选
-            if (shippingFilter && showRow) {
-                const shippingSelect = row.querySelector('.shipping-select');
-                const isIncluded = shippingSelect && shippingSelect.value === 'true';
-                if ((shippingFilter === 'included' && !isIncluded) || (shippingFilter === 'not-included' && isIncluded)) {
-                    showRow = false;
-                }
-            }
-            
-            // 毛坯筛选
-            if (blankFilter && showRow) {
-                const blankSelect = row.querySelector('.blank-select');
-                const isPurchased = blankSelect && blankSelect.value === 'true';
-                if ((blankFilter === 'purchased' && !isPurchased) || (blankFilter === 'unpurchased' && isPurchased)) {
-                    showRow = false;
-                }
-            }
-            
-            // 状态筛选
-            if (statusFilter && showRow) {
-                const statusSelect = row.querySelector('.status-select');
-                const currentStatus = statusSelect ? statusSelect.value : '';
-                if (currentStatus !== statusFilter) {
-                    showRow = false;
-                }
-            }
-            
-            row.style.display = showRow ? '' : 'none';
-        });
-        
-        // 更新显示的订单数量
-        updateFilteredCount();
-        
-        // 更新筛选器颜色
-        updateSelectColors();
-    }
-    
-    function clearFilters() {
-        // 清除所有筛选器的选择
-        document.getElementById('platformFilter').value = '';
-        document.getElementById('depositFilter').value = '';
-        document.getElementById('shippingFilter').value = '';
-        document.getElementById('blankFilter').value = '';
-        document.getElementById('statusFilter').value = '';
-        
-        // 重新应用筛选（显示所有行）
-        applyFilters();
-        
-        // 更新筛选器颜色
-        updateSelectColors();
-    }
-    
-    function updateFilteredCount() {
-        const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
-        const totalRows = document.querySelectorAll('tbody tr');
-        
-        // 可以在这里添加显示筛选结果数量的逻辑
-        console.log(`显示 ${visibleRows.length} / ${totalRows.length} 个订单`);
-    }
-    
-    // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', function() {
-        updateBatchDeleteBtn();
-        // 初始化已完成订单的显示状态
-        const checkbox = document.getElementById('showCompleted');
-        // 如果URL中没有show_completed参数，默认隐藏已完成订单
-        const urlParams = new URLSearchParams(window.location.search);
-        if (!urlParams.has('show_completed')) {
-            checkbox.checked = false;
-        }
-        toggleCompleted();
-        updateSelectColors();
-        generateCalendar(currentMonth, currentYear);
-        loadBackgroundSettings();
+    const monthOrders = orders.filter(order => {
+        const orderDate = new Date(order.needed_date);
+        return orderDate.getFullYear() === year && orderDate.getMonth() === month;
     });
+    
+    document.getElementById('calendar-month-count').textContent = `${monthOrders.length} 个订单`;
+}
+
+// 编辑订单
+function editOrder(orderId) {
+    window.location.href = `/edit/${orderId}`;
+}
 </script>
 {% endblock %}

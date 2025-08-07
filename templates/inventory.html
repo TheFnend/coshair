@@ -1,0 +1,556 @@
+{% extends "dashboard_base.html" %}
+
+{% block page_title %}材料库存{% endblock %}
+
+{% block extra_css %}
+<style>
+    .inventory-card {
+        background: var(--white-color);
+        border-radius: 25px;
+        padding: 30px;
+        box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
+        margin-bottom: 30px;
+        transition: all 0.3s ease;
+    }
+
+    .inventory-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px 0 rgba(75, 70, 92, 0.15);
+    }
+
+    .inventory-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #E6EFF5;
+    }
+
+    .inventory-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--dark-color);
+        margin: 0;
+    }
+
+    .add-material-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .add-material-btn:hover {
+        background: #1411D1;
+        transform: translateY(-2px);
+        color: white;
+    }
+
+    .inventory-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 25px;
+        background: var(--light-color);
+        border-radius: 15px;
+        transition: all 0.3s ease;
+    }
+
+    .stat-item:hover {
+        background: rgba(24, 20, 243, 0.05);
+        transform: translateY(-3px);
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .stat-value.primary { color: var(--primary-color); }
+    .stat-value.success { color: var(--success-color); }
+    .stat-value.warning { color: var(--warning-color); }
+    .stat-value.danger { color: var(--danger-color); }
+
+    .stat-label {
+        color: var(--secondary-color);
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .inventory-table {
+        background: var(--white-color);
+        border-radius: 25px;
+        overflow: hidden;
+        box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
+    }
+
+    .table {
+        margin: 0;
+    }
+
+    .table thead th {
+        background: var(--light-color);
+        border: none;
+        padding: 20px 15px;
+        font-weight: 600;
+        color: var(--dark-color);
+        font-size: 14px;
+    }
+
+    .table tbody td {
+        padding: 20px 15px;
+        border: none;
+        border-bottom: 1px solid #E6EFF5;
+        vertical-align: middle;
+    }
+
+    .table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .table tbody tr:hover {
+        background-color: rgba(24, 20, 243, 0.02);
+    }
+
+    .material-image {
+        width: 50px;
+        height: 50px;
+        border-radius: 10px;
+        object-fit: cover;
+        background: var(--light-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--secondary-color);
+        font-size: 20px;
+    }
+
+    .material-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .material-name {
+        font-weight: 600;
+        color: var(--dark-color);
+        margin-bottom: 4px;
+    }
+
+    .material-category {
+        font-size: 12px;
+        color: var(--secondary-color);
+        background: var(--light-color);
+        padding: 4px 8px;
+        border-radius: 8px;
+        display: inline-block;
+    }
+
+    .stock-level {
+        font-weight: 700;
+        font-size: 18px;
+    }
+
+    .stock-level.normal {
+        color: var(--success-color);
+    }
+
+    .stock-level.low {
+        color: var(--warning-color);
+    }
+
+    .stock-level.critical {
+        color: var(--danger-color);
+        animation: pulse 2s infinite;
+    }
+
+    .stock-level.out {
+        color: var(--danger-color);
+        background: rgba(254, 92, 115, 0.1);
+        padding: 4px 8px;
+        border-radius: 8px;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        min-width: 80px;
+        display: inline-block;
+    }
+
+    .status-available {
+        background: rgba(22, 219, 170, 0.1);
+        color: var(--success-color);
+    }
+
+    .status-low {
+        background: rgba(255, 187, 56, 0.1);
+        color: var(--warning-color);
+    }
+
+    .status-critical {
+        background: rgba(254, 92, 115, 0.1);
+        color: var(--danger-color);
+    }
+
+    .status-out {
+        background: rgba(108, 117, 125, 0.1);
+        color: #6C757D;
+    }
+
+    .action-btn {
+        width: 35px;
+        height: 35px;
+        border-radius: 8px;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 3px;
+        transition: all 0.3s ease;
+        font-size: 14px;
+    }
+
+    .action-btn.edit {
+        background: rgba(24, 20, 243, 0.1);
+        color: var(--primary-color);
+    }
+
+    .action-btn.edit:hover {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .action-btn.restock {
+        background: rgba(22, 219, 170, 0.1);
+        color: var(--success-color);
+    }
+
+    .action-btn.restock:hover {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .action-btn.delete {
+        background: rgba(254, 92, 115, 0.1);
+        color: var(--danger-color);
+    }
+
+    .action-btn.delete:hover {
+        background: var(--danger-color);
+        color: white;
+    }
+
+    .filter-section {
+        background: var(--white-color);
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
+    }
+
+    .form-select, .form-control {
+        border: 2px solid #E6EFF5;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .form-select:focus, .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(24, 20, 243, 0.1);
+    }
+
+    .btn-outline-secondary {
+        border: 2px solid #E6EFF5;
+        color: var(--secondary-color);
+        border-radius: 12px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-outline-secondary:hover {
+        background: var(--secondary-color);
+        border-color: var(--secondary-color);
+        color: white;
+    }
+
+    .low-stock-alert {
+        background: linear-gradient(135deg, rgba(255, 187, 56, 0.1), rgba(255, 187, 56, 0.05));
+        border-left: 4px solid var(--warning-color);
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+    }
+
+    .alert-title {
+        font-weight: 700;
+        color: var(--warning-color);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .alert-content {
+        color: var(--secondary-color);
+        font-size: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 库存统计 -->
+<div class="inventory-stats">
+    <div class="stat-item">
+        <div class="stat-value primary">{{ total_materials }}</div>
+        <div class="stat-label">材料种类</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value success">{{ available_materials }}</div>
+        <div class="stat-label">库存充足</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value warning">{{ low_stock_materials }}</div>
+        <div class="stat-label">库存不足</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value danger">{{ out_of_stock_materials }}</div>
+        <div class="stat-label">缺货材料</div>
+    </div>
+</div>
+
+<!-- 低库存提醒 -->
+{% if low_stock_items %}
+<div class="low-stock-alert">
+    <div class="alert-title">
+        <i class="bi bi-exclamation-triangle"></i>
+        库存预警
+    </div>
+    <div class="alert-content">
+        以下材料库存不足，建议及时补货：
+        {% for item in low_stock_items %}
+            <strong>{{ item.name }}</strong>{% if not loop.last %}、{% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 筛选器 -->
+<div class="filter-section">
+    <div class="row align-items-end">
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-semibold">材料分类</label>
+            <select class="form-select" id="categoryFilter" onchange="applyFilters()">
+                <option value="">全部分类</option>
+                <option value="毛坯">毛坯</option>
+                <option value="涂料">涂料</option>
+                <option value="工具">工具</option>
+                <option value="配件">配件</option>
+                <option value="包装">包装</option>
+            </select>
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-semibold">库存状态</label>
+            <select class="form-select" id="statusFilter" onchange="applyFilters()">
+                <option value="">全部状态</option>
+                <option value="available">库存充足</option>
+                <option value="low">库存不足</option>
+                <option value="critical">库存紧急</option>
+                <option value="out">缺货</option>
+            </select>
+        </div>
+        <div class="col-md-3 mb-3">
+            <label class="form-label fw-semibold">搜索材料</label>
+            <input type="text" class="form-control" id="searchInput" placeholder="输入材料名称..." onkeyup="applyFilters()">
+        </div>
+        <div class="col-md-3 mb-3">
+            <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                <i class="bi bi-arrow-clockwise"></i> 清除筛选
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 材料库存表格 -->
+<div class="inventory-card">
+    <div class="inventory-header">
+        <h2 class="inventory-title">材料库存清单</h2>
+        <button class="add-material-btn" onclick="addMaterial()">
+            <i class="bi bi-plus-circle"></i>
+            添加材料
+        </button>
+    </div>
+    
+    <div class="inventory-table">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 300px;">材料信息</th>
+                        <th style="width: 120px;">分类</th>
+                        <th style="width: 100px;">当前库存</th>
+                        <th style="width: 100px;">最低库存</th>
+                        <th style="width: 100px;">单价</th>
+                        <th style="width: 120px;">状态</th>
+                        <th style="width: 150px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for material in materials %}
+                    <tr data-category="{{ material.category }}" 
+                        data-status="{{ material.status }}" 
+                        data-name="{{ material.name }}">
+                        <td>
+                            <div class="material-info">
+                                <div class="material-image">
+                                    {% if material.image %}
+                                        <img src="{{ material.image }}" alt="{{ material.name }}">
+                                    {% else %}
+                                        <i class="bi bi-box"></i>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <div class="material-name">{{ material.name }}</div>
+                                    <div class="material-category">{{ material.category }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>{{ material.category }}</td>
+                        <td>
+                            <span class="stock-level {{ material.stock_class }}">
+                                {{ material.current_stock }}
+                            </span>
+                        </td>
+                        <td>{{ material.min_stock }}</td>
+                        <td>¥{{ material.unit_price }}</td>
+                        <td>
+                            <span class="status-badge status-{{ material.status }}">
+                                {% if material.status == 'available' %}库存充足
+                                {% elif material.status == 'low' %}库存不足
+                                {% elif material.status == 'critical' %}库存紧急
+                                {% else %}缺货{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="action-btn restock" onclick="restockMaterial({{ material.id }})" title="补货">
+                                <i class="bi bi-plus-square"></i>
+                            </button>
+                            <button class="action-btn edit" onclick="editMaterial({{ material.id }})" title="编辑">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="action-btn delete" onclick="deleteMaterial({{ material.id }})" title="删除">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 应用筛选器
+function applyFilters() {
+    const categoryFilter = document.getElementById('categoryFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const searchInput = document.getElementById('searchInput').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // 分类筛选
+        if (categoryFilter && row.dataset.category !== categoryFilter) {
+            show = false;
+        }
+        
+        // 状态筛选
+        if (statusFilter && row.dataset.status !== statusFilter) {
+            show = false;
+        }
+        
+        // 名称搜索
+        if (searchInput && !row.dataset.name.toLowerCase().includes(searchInput)) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// 清除筛选器
+function clearFilters() {
+    document.getElementById('categoryFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('searchInput').value = '';
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        row.style.display = '';
+    });
+}
+
+// 添加材料
+function addMaterial() {
+    // 这里可以打开添加材料的模态框或跳转到添加页面
+    alert('添加材料功能开发中...');
+}
+
+// 补货
+function restockMaterial(materialId) {
+    const quantity = prompt('请输入补货数量：');
+    if (quantity && !isNaN(quantity) && quantity > 0) {
+        // 这里可以发送AJAX请求更新库存
+        alert(`材料ID ${materialId} 补货 ${quantity} 件`);
+        // 刷新页面或更新显示
+        location.reload();
+    }
+}
+
+// 编辑材料
+function editMaterial(materialId) {
+    // 这里可以打开编辑材料的模态框或跳转到编辑页面
+    alert(`编辑材料ID ${materialId}`);
+}
+
+// 删除材料
+function deleteMaterial(materialId) {
+    if (confirm('确定要删除这个材料吗？此操作不可恢复！')) {
+        // 这里可以发送AJAX请求删除材料
+        alert(`删除材料ID ${materialId}`);
+        // 刷新页面或移除行
+        location.reload();
+    }
+}
+</script>
+{% endblock %}

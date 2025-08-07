@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}07妙妙屋订单管理系统{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #1814F3;
+            --secondary-color: #718EBF;
+            --success-color: #16DBAA;
+            --warning-color: #FFBB38;
+            --danger-color: #FE5C73;
+            --dark-color: #232323;
+            --light-color: #F5F7FA;
+            --white-color: #FFFFFF;
+            --sidebar-width: 250px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--light-color);
+            color: var(--dark-color);
+        }
+
+        /* 侧边栏样式 */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--white-color);
+            border-right: 1px solid #E6EFF5;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 30px 25px;
+            border-bottom: 1px solid #E6EFF5;
+        }
+
+        .sidebar-logo {
+            font-size: 25px;
+            font-weight: 800;
+            color: var(--dark-color);
+            text-decoration: none;
+        }
+
+        .sidebar-nav {
+            padding: 20px 0;
+        }
+
+        .nav-item {
+            margin-bottom: 5px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            color: var(--secondary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color);
+            background-color: rgba(24, 20, 243, 0.05);
+        }
+
+        .nav-link.active {
+            color: var(--primary-color);
+            background-color: rgba(24, 20, 243, 0.1);
+        }
+
+        .nav-link.active::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            background: var(--primary-color);
+            border-radius: 10px 0 0 10px;
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 15px;
+            fill: currentColor;
+        }
+
+        /* 主要内容区域 */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+        }
+
+        /* 顶部导航栏 */
+        .top-navbar {
+            background: var(--white-color);
+            padding: 20px 30px;
+            border-bottom: 1px solid #E6EFF5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin: 0;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .notification-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--light-color);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--secondary-color);
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .notification-btn:hover {
+            background: var(--primary-color);
+            color: var(--white-color);
+        }
+
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        /* 内容区域 */
+        .content-area {
+            padding: 30px;
+        }
+
+        /* 卡片样式 */
+        .dashboard-card {
+            background: var(--white-color);
+            border-radius: 25px;
+            padding: 30px;
+            box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
+            border: none;
+            margin-bottom: 30px;
+        }
+
+        .card-header {
+            border: none;
+            background: transparent;
+            padding: 0 0 20px 0;
+        }
+
+        .card-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin: 0;
+        }
+
+        /* 统计卡片 */
+        .stat-card {
+            background: var(--white-color);
+            border-radius: 25px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
+            border: none;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 24px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--dark-color);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .top-navbar {
+                padding: 15px 20px;
+            }
+
+            .content-area {
+                padding: 20px;
+            }
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--secondary-color);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <a href="{{ url_for('index') }}" class="sidebar-logo">
+                <i class="bi bi-gem"></i> 07妙妙屋
+            </a>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="{{ url_for('dashboard_index') }}" class="nav-link {% if request.endpoint == 'dashboard_index' %}active{% endif %}">
+                    <img src="{{ url_for('static', filename='icons/home-icon.svg') }}" class="nav-icon" alt="Dashboard">
+                    订单列表
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('calendar') }}" class="nav-link {% if request.endpoint == 'calendar' %}active{% endif %}">
+                    <i class="bi bi-calendar3 nav-icon"></i>
+                    订单日历
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('revenue') }}" class="nav-link {% if request.endpoint == 'revenue' %}active{% endif %}">
+                    <img src="{{ url_for('static', filename='icons/investment-icon.svg') }}" class="nav-icon" alt="收入统计">
+                    收入统计
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('analytics') }}" class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}">
+                    <i class="bi bi-bar-chart nav-icon"></i>
+                    订单分析
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}">
+                    <i class="bi bi-box-seam nav-icon"></i>
+                    材料库存
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('timesheet') }}" class="nav-link {% if request.endpoint == 'timesheet' %}active{% endif %}">
+                    <i class="bi bi-clock nav-icon"></i>
+                    工时记录
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('add_order') }}" class="nav-link {% if request.endpoint == 'add_order' %}active{% endif %}">
+                    <i class="bi bi-plus-circle nav-icon"></i>
+                    添加订单
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link">
+                    <img src="{{ url_for('static', filename='icons/settings-icon.svg') }}" class="nav-icon" alt="设置">
+                    系统设置
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- 主要内容区域 -->
+    <div class="main-content">
+        <!-- 顶部导航栏 -->
+        <div class="top-navbar">
+            <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+            <div class="user-profile">
+                <button class="notification-btn">
+                    <i class="bi bi-bell"></i>
+                </button>
+                <img src="{{ url_for('static', filename='头像_耀骑士临光.png') }}" alt="用户头像" class="user-avatar">
+            </div>
+        </div>
+
+        <!-- 内容区域 -->
+        <div class="content-area">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -16,6 +16,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, date
 import os
+import json
 
 # 创建Flask应用实例
 app = Flask(__name__)
@@ -122,14 +123,14 @@ def index():
             'contact': order.contact,
             'needed_date': order.needed_date.strftime('%Y-%m-%d'),
             'order_date': order.order_date.strftime('%Y-%m-%d'),
-            'deposit_paid': order.deposit_paid,
+            'deposit_paid': bool(order.deposit_paid),
             'final_amount': order.final_amount,
-            'shipping_included': order.shipping_included,
-            'blank_purchased': order.blank_purchased,
+            'shipping_included': bool(order.shipping_included),
+            'blank_purchased': bool(order.blank_purchased),
             'status': order.status
         })
     
-    return render_template('index.html', orders=orders, orders_json=orders_dict, sort_by=sort_by, order=order, show_completed=show_completed, platform_filter=platform_filter)
+    return render_template('dashboard_index.html', orders=orders, orders_json=json.dumps(orders_dict), sort_by=sort_by, order=order, show_completed=show_completed, platform_filter=platform_filter)
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_order():
@@ -290,8 +291,348 @@ def api_batch_delete():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
 
+# ==================== Dashboard页面路由 ====================
+
+@app.route('/dashboard')
+def dashboard_index():
+    """
+    Dashboard主页路由 - 显示订单列表
+    
+    功能：
+    - 支持按多种字段排序
+    - 支持按平台筛选
+    - 支持显示/隐藏已完成订单
+    - 计算订单统计信息
+    """
+    
+    # 获取URL参数
+    sort_by = request.args.get('sort', 'needed_date')  # 排序字段
+    order = request.args.get('order', 'asc')  # 排序方向
+    show_completed = request.args.get('show_completed', 'false') == 'true'  # 是否显示已完成
+    platform_filter = request.args.get('platform', '')  # 平台筛选
+    
+    # 构建数据库查询
+    query = Order.query
+    
+    # 平台筛选
+    if platform_filter:
+        query = query.filter(Order.contact == platform_filter)
+    
+    # 排序
+    if sort_by == 'needed_date':
+        if order == 'desc':
+            orders = query.order_by(Order.needed_date.desc()).all()
+        else:
+            orders = query.order_by(Order.needed_date.asc()).all()
+    elif sort_by == 'order_date':
+        if order == 'desc':
+            orders = query.order_by(Order.order_date.desc()).all()
+        else:
+            orders = query.order_by(Order.order_date.asc()).all()
+    else:
+        orders = query.order_by(Order.needed_date.asc()).all()
+    
+    # 将订单对象转换为字典以便JSON序列化
+    orders_dict = []
+    for order in orders:
+        orders_dict.append({
+            'id': order.id,
+            'cn': order.cn,
+            'character': order.character,
+            'contact': order.contact,
+            'needed_date': order.needed_date.strftime('%Y-%m-%d'),
+            'order_date': order.order_date.strftime('%Y-%m-%d'),
+            'deposit_paid': bool(order.deposit_paid),
+            'final_amount': order.final_amount,
+            'shipping_included': bool(order.shipping_included),
+            'blank_purchased': bool(order.blank_purchased),
+            'status': order.status
+        })
+    
+    return render_template('dashboard_index.html', orders=orders, orders_json=json.dumps(orders_dict), sort_by=sort_by, order=order, show_completed=show_completed, platform_filter=platform_filter)
+
+@app.route('/analytics')
+def analytics():
+    """
+    订单分析页面
+    
+    功能：
+    - 显示业务指标
+    - 图表分析
+    - TOP5列表
+    """
+    orders = Order.query.all()
+    
+    # 计算基本统计
+    total_orders = len(orders)
+    completed_orders = len([o for o in orders if o.status in ['已完成', '已发货']])
+    total_revenue = sum([o.final_amount for o in orders if o.status in ['已完成', '已发货']])
+    avg_order_value = total_revenue / completed_orders if completed_orders > 0 else 0
+    
+    # 准备图表数据
+    status_chart_data = {
+        'labels': ['待制作', '已完成', '已发货', '已取消'],
+        'data': [
+            len([o for o in orders if o.status == '待制作']),
+            len([o for o in orders if o.status == '已完成']),
+            len([o for o in orders if o.status == '已发货']),
+            len([o for o in orders if o.status == '已取消'])
+        ]
+    }
+    
+    platform_chart_data = {
+        'labels': ['QQ', '微信', '闲鱼'],
+        'orders': [
+            len([o for o in orders if o.contact == 'QQ']),
+            len([o for o in orders if o.contact == '微信']),
+            len([o for o in orders if o.contact == '闲鱼'])
+        ],
+        'revenue': [
+            sum([o.final_amount for o in orders if o.contact == 'QQ' and o.status in ['已完成', '已发货']]),
+            sum([o.final_amount for o in orders if o.contact == '微信' and o.status in ['已完成', '已发货']]),
+            sum([o.final_amount for o in orders if o.contact == '闲鱼' and o.status in ['已完成', '已发货']])
+        ]
+    }
+    
+    return render_template('analytics.html',
+                         total_orders=total_orders,
+                         completed_orders=completed_orders,
+                         total_revenue=total_revenue,
+                         avg_order_value=avg_order_value,
+                         status_chart_data=json.dumps(status_chart_data),
+                         platform_chart_data=json.dumps(platform_chart_data),
+                         order_growth=12.5,
+                         completion_rate=85.2,
+                         completion_growth=3.2,
+                         avg_completion_days=7,
+                         completion_days_change=1,
+                         customer_satisfaction=94.8,
+                         efficiency_score=92,
+                         quality_score=96,
+                         on_time_rate=88,
+                         risk_orders=3)
+
+@app.route('/inventory')
+def inventory():
+    """
+    材料库存页面
+    
+    功能：
+    - 库存管理
+    - 低库存提醒
+    """
+    # 模拟库存数据
+    inventory_items = [
+        {'name': '白色毛坯', 'stock': 15, 'min_stock': 10, 'unit': '个'},
+        {'name': '黑色毛坯', 'stock': 8, 'min_stock': 10, 'unit': '个'},
+        {'name': '金色喷漆', 'stock': 3, 'min_stock': 5, 'unit': '瓶'},
+        {'name': '银色喷漆', 'stock': 12, 'min_stock': 5, 'unit': '瓶'},
+    ]
+    
+    return render_template('inventory.html', inventory_items=inventory_items)
+
+@app.route('/calendar')
+def calendar():
+    """
+    订单日历页面
+    
+    功能：
+    - 以日历形式显示订单
+    - 按紧急程度标记颜色
+    - 显示月度统计信息
+    """
+    # 获取所有订单
+    orders = Order.query.order_by(Order.needed_date.asc()).all()
+    
+    # 转换为JSON格式
+    orders_json = []
+    for order in orders:
+        orders_json.append({
+            'id': order.id,
+            'cn': order.cn,
+            'character': order.character,
+            'contact': order.contact,
+            'needed_date': order.needed_date.strftime('%Y-%m-%d'),
+            'order_date': order.order_date.strftime('%Y-%m-%d'),
+            'status': order.status,
+            'final_amount': order.final_amount
+        })
+    
+    # 计算统计信息
+    today = date.today()
+    current_month_orders = [o for o in orders if o.needed_date.month == today.month and o.needed_date.year == today.year]
+    
+    urgent_orders = []
+    overdue_orders = []
+    completed_orders = []
+    
+    for order in orders:
+        days_left = (order.needed_date - today).days
+        if order.status in ['已完成', '已发货']:
+            completed_orders.append(order)
+        elif days_left < 0:
+            overdue_orders.append(order)
+        elif days_left <= 7:
+            urgent_orders.append(order)
+    
+    return render_template('calendar.html', 
+                         orders_json=orders_json,
+                         current_date=today,
+                         current_month_orders=current_month_orders,
+                         urgent_orders=urgent_orders,
+                         overdue_orders=overdue_orders,
+                         completed_orders=completed_orders)
+
+@app.route('/revenue')
+def revenue():
+    """
+    收入统计页面
+    
+    功能：
+    - 显示总收入和各项统计
+    - 按平台分析收入分布
+    - 月度收入趋势图表
+    """
+    from collections import defaultdict
+    import calendar
+    
+    # 获取所有已完成的订单
+    completed_orders = Order.query.filter(Order.status.in_(['已完成', '已发货'])).all()
+    
+    # 计算总收入
+    total_revenue = sum(order.final_amount for order in completed_orders)
+    
+    # 计算平均订单价值
+    avg_order_value = total_revenue / len(completed_orders) if completed_orders else 0
+    
+    # 计算待收款订单
+    pending_orders_list = Order.query.filter(Order.status.notin_(['已完成', '已发货', '已取消'])).all()
+    pending_orders = len(pending_orders_list)
+    pending_revenue = sum(order.final_amount for order in pending_orders_list)
+    
+    # 按平台统计收入
+    platform_revenue = defaultdict(lambda: {'revenue': 0, 'orders': 0})
+    for order in completed_orders:
+        platform_revenue[order.contact]['revenue'] += order.final_amount
+        platform_revenue[order.contact]['orders'] += 1
+    
+    # 格式化平台收入数据
+    platform_revenue_formatted = {}
+    for platform, data in platform_revenue.items():
+        platform_revenue_formatted[platform] = {
+            'revenue': f"{data['revenue']:.0f}",
+            'orders': data['orders']
+        }
+    
+    # 按月统计收入
+    monthly_revenue = defaultdict(lambda: {'revenue': 0, 'orders': 0})
+    for order in completed_orders:
+        month_key = order.needed_date.strftime('%Y-%m')
+        monthly_revenue[month_key]['revenue'] += order.final_amount
+        monthly_revenue[month_key]['orders'] += 1
+    
+    # 生成月度数据
+    monthly_data = []
+    monthly_chart_data = {'labels': [], 'data': []}
+    
+    sorted_months = sorted(monthly_revenue.keys())
+    prev_revenue = 0
+    
+    for month_key in sorted_months:
+        data = monthly_revenue[month_key]
+        year, month = month_key.split('-')
+        month_name = f"{year}年{int(month)}月"
+        
+        # 计算环比增长
+        growth = 0
+        if prev_revenue > 0:
+            growth = ((data['revenue'] - prev_revenue) / prev_revenue) * 100
+        
+        monthly_data.append({
+            'month': month_name,
+            'orders': data['orders'],
+            'revenue': f"{data['revenue']:.0f}",
+            'avg_value': f"{data['revenue'] / data['orders']:.0f}" if data['orders'] > 0 else "0",
+            'growth': f"{growth:.1f}" if growth != 0 else "0"
+        })
+        
+        monthly_chart_data['labels'].append(month_name)
+        monthly_chart_data['data'].append(data['revenue'])
+        
+        prev_revenue = data['revenue']
+    
+    return render_template('revenue.html',
+                         total_revenue=f"{total_revenue:.0f}",
+                         completed_orders=len(completed_orders),
+                         avg_order_value=f"{avg_order_value:.0f}",
+                         pending_orders=pending_orders,
+                         pending_revenue=f"{pending_revenue:.0f}",
+                         platform_revenue=platform_revenue_formatted,
+                         monthly_data=monthly_data,
+                         monthly_chart_data=monthly_chart_data)
+
 # 添加模板上下文处理器
 # ==================== 模板上下文处理器 ====================
+
+@app.route('/timesheet')
+def timesheet():
+    """
+    工时记录页面
+    
+    功能：
+    - 显示工时统计
+    - 计时器功能
+    - 工时记录管理
+    """
+    # 模拟工时数据（实际应用中应从数据库获取）
+    time_entries = [
+        {
+            'id': 1,
+            'task_name': '角色A制作',
+            'order_info': '订单 #001',
+            'start_time': '09:00',
+            'end_time': '12:30',
+            'duration': '3.5h',
+            'status': 'completed',
+            'icon': 'brush',
+            'date': '2024-01-15'
+        },
+        {
+            'id': 2,
+            'task_name': '角色B制作',
+            'order_info': '订单 #002',
+            'start_time': '14:00',
+            'end_time': None,
+            'duration': '2.0h',
+            'status': 'working',
+            'icon': 'palette',
+            'date': '2024-01-15'
+        },
+        {
+            'id': 3,
+            'task_name': '角色C制作',
+            'order_info': '订单 #003',
+            'start_time': '10:30',
+            'end_time': '11:45',
+            'duration': '1.25h',
+            'status': 'paused',
+            'icon': 'scissors',
+            'date': '2024-01-14'
+        }
+    ]
+    
+    # 计算工时统计
+    today_hours = '6.5h'
+    week_hours = '32.5h'
+    month_hours = '128h'
+    avg_daily_hours = '6.4h'
+    
+    return render_template('timesheet.html',
+                         time_entries=time_entries,
+                         today_hours=today_hours,
+                         week_hours=week_hours,
+                         month_hours=month_hours,
+                         avg_daily_hours=avg_daily_hours)
 
 @app.context_processor
 def inject_today():

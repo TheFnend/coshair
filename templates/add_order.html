@@ -1,15 +1,145 @@
-{% extends "base.html" %}
+{% extends "dashboard_base.html" %}
 
 {% block title %}添加订单 - 07妙妙屋{% endblock %}
 
+{% block page_title %}添加订单{% endblock %}
+
 {% block content %}
+<style>
+:root {
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --info-color: #06b6d4;
+    --light-bg: #f8fafc;
+    --border-color: #e2e8f0;
+    --text-muted: #64748b;
+    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.dashboard-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.card-header-custom {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px 12px 0 0;
+    border: none;
+}
+
+.card-header-custom h4 {
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.form-label {
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.form-control, .form-select {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    outline: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+}
+
+.btn-secondary {
+    background: #6b7280;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+    transform: translateY(-1px);
+}
+
+/* 状态选择器样式 */
+.contact-select.qq { background-color: #e3f2fd; border-color: #2196f3; }
+.contact-select.wechat { background-color: #e8f5e8; border-color: #4caf50; }
+.contact-select.xianyu { background-color: #fff3e0; border-color: #ff9800; }
+
+.deposit-select.paid { background-color: #e8f5e8; border-color: #4caf50; }
+.deposit-select.unpaid { background-color: #ffebee; border-color: #f44336; }
+
+.shipping-select.included { background-color: #e8f5e8; border-color: #4caf50; }
+.shipping-select.not-included { background-color: #fff3e0; border-color: #ff9800; }
+
+.blank-select.purchased { background-color: #e8f5e8; border-color: #4caf50; }
+.blank-select.unpurchased { background-color: #ffebee; border-color: #f44336; }
+
+.cake-box-select.needed { background-color: #e3f2fd; border-color: #2196f3; }
+.cake-box-select.not-needed { background-color: #f3e5f5; border-color: #9c27b0; }
+
+.status-select.pending { background-color: #fff3e0; border-color: #ff9800; }
+.status-select.in-progress { background-color: #e3f2fd; border-color: #2196f3; }
+.status-select.completed { background-color: #e8f5e8; border-color: #4caf50; }
+.status-select.shipped { background-color: #e1f5fe; border-color: #00bcd4; }
+.status-select.cancelled { background-color: #ffebee; border-color: #f44336; }
+
+.input-group-text {
+    background: var(--light-bg);
+    border: 2px solid var(--border-color);
+    border-right: none;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.text-danger {
+    color: var(--danger-color) !important;
+}
+</style>
+
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
+    <div class="col-md-10 col-lg-8">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
                 <h4><i class="bi bi-plus-circle"></i> 添加新订单</h4>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding: 2rem;">
                 <form method="POST">
                     <div class="row">
                         <div class="col-md-6">
@@ -119,7 +249,7 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{{ url_for('index') }}" class="btn btn-secondary me-md-2">
+                        <a href="{{ url_for('dashboard_index') }}" class="btn btn-secondary me-md-2">
                             <i class="bi bi-arrow-left"></i> 返回列表
                         </a>
                         <button type="submit" class="btn btn-primary">
