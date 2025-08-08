@@ -104,51 +104,51 @@
 }
 
 .table tbody tr.expired:nth-child(odd) {
-    background-color: rgba(220, 53, 69, 0.9) !important;
+    background-color: rgba(220, 53, 69, 0.8) !important;
     color: white !important;
 }
 
 /* 三天内订单 - 淡红色背景斑马线 */
 .table tbody tr.very-urgent:nth-child(even) {
-    background-color: rgba(248, 215, 218, 0.7) !important;
+    background-color: rgba(248, 215, 218, 0.8) !important;
     color: #721c24 !important;
 }
 
 .table tbody tr.very-urgent:nth-child(odd) {
-    background-color: rgba(248, 215, 218, 0.9) !important;
+    background-color: rgba(248, 215, 218, 0.8) !important;
     color: #721c24 !important;
 }
 
 /* 七天内订单 - 淡黄色背景斑马线 */
 .table tbody tr.urgent:nth-child(even) {
-    background-color: rgba(255, 243, 205, 0.7) !important;
+    background-color: rgba(255, 243, 205, 0.8) !important;
     color: #856404 !important;
 }
 
 .table tbody tr.urgent:nth-child(odd) {
-    background-color: rgba(255, 243, 205, 0.9) !important;
+    background-color: rgba(255, 243, 205, 0.8) !important;
     color: #856404 !important;
 }
 
 /* 已完成订单 - 浅绿色背景斑马线 */
 .table tbody tr.completed:nth-child(even) {
-    background-color: rgba(212, 237, 218, 0.7) !important;
+    background-color: rgba(212, 237, 218, 0.8) !important;
     color: #155724 !important;
 }
 
 .table tbody tr.completed:nth-child(odd) {
-    background-color: rgba(212, 237, 218, 0.9) !important;
+    background-color: rgba(212, 237, 218, 0.8) !important;
     color: #155724 !important;
 }
 
 /* 已发货订单 - 淡蓝色背景斑马线 */
 .table tbody tr.shipped:nth-child(even) {
-    background-color: rgba(209, 236, 241, 0.7) !important;
+    background-color: rgba(209, 236, 241, 0.8) !important;
     color: #0c5460 !important;
 }
 
 .table tbody tr.shipped:nth-child(odd) {
-    background-color: rgba(209, 236, 241, 0.9) !important;
+    background-color: rgba(209, 236, 241, 0.8) !important;
     color: #0c5460 !important;
 }
 
@@ -165,7 +165,7 @@
 
 /* ==================== 下拉选择框颜色样式 ==================== */
 
-/* 定金状态颜色 */
+/* 定金状态选项颜色 */
 .deposit-select option[value="true"] {
     background-color: #d4edda !important;
     color: #155724 !important;
@@ -191,8 +191,8 @@
 
 /* 订单状态选项颜色 */
 .status-select option[value="待制作"] {
-    background-color: #e2e3e5 !important;
-    color: #495057 !important;
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
 }
 .status-select option[value="制作中"] {
     background-color: #fff3cd !important;
@@ -463,7 +463,7 @@
 </div>
 
 <!-- 筛选和排序选项控制面板 -->
-<div class="card mb-4" style="background: rgba(255, 255, 255, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+<div class="card mb-4" style="background: rgba(255, 255, 255, 0.75); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);backdrop-filter: blur(10px);">
     <div class="card-body">
         <!-- 筛选选项 -->
         <div class="row mb-4">
@@ -550,7 +550,7 @@
 <!-- 订单表格 -->
 {% if orders %}
 <div class="table-container">
-    <div class="table-responsive" style="background: rgba(255, 255, 255, 0.85); border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); backdrop-filter: blur(10px);">
+    <div class="table-responsive" style="background: rgba(255, 255, 255, 0.75); border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); backdrop-filter: blur(4px);">
         <table class="table table-hover" style="background: transparent; border-radius: 10px; overflow: hidden;">
         <thead>
             <tr  style="font-size: 17px;">
@@ -779,58 +779,68 @@ function applyFilters() {
     const shippingFilter = document.getElementById('shippingFilter').value;
     const blankFilter = document.getElementById('blankFilter').value;
     const statusFilter = document.getElementById('statusFilter').value;
+    const showCompleted = document.getElementById('showCompleted').checked;
     
     const rows = document.querySelectorAll('tbody tr');
     
     rows.forEach(row => {
         let show = true;
         
-        // 平台筛选
-        if (platformFilter) {
-            const contactSelect = row.querySelector('.contact-select');
-            if (contactSelect && contactSelect.value !== platformFilter) {
-                show = false;
-            }
+        // 首先检查是否是已完成或已发货订单，如果不显示已完成订单则隐藏
+        const isCompletedOrShipped = row.classList.contains('completed') || row.classList.contains('shipped');
+        if (isCompletedOrShipped && !showCompleted) {
+            show = false;
         }
         
-        // 定金状态筛选
-        if (depositFilter) {
-            const depositSelect = row.querySelector('.deposit-select');
-            if (depositSelect) {
-                const isPaid = depositSelect.value === 'true';
-                if ((depositFilter === 'paid' && !isPaid) || (depositFilter === 'unpaid' && isPaid)) {
+        // 只有在订单应该显示的情况下才进行其他筛选
+        if (show) {
+            // 平台筛选
+            if (platformFilter) {
+                const contactSelect = row.querySelector('.contact-select');
+                if (contactSelect && contactSelect.value !== platformFilter) {
                     show = false;
                 }
             }
-        }
-        
-        // 含邮状态筛选
-        if (shippingFilter) {
-            const shippingSelect = row.querySelector('.shipping-select');
-            if (shippingSelect) {
-                const isIncluded = shippingSelect.value === 'true';
-                if ((shippingFilter === 'included' && !isIncluded) || (shippingFilter === 'not-included' && isIncluded)) {
-                    show = false;
+            
+            // 定金状态筛选
+            if (depositFilter) {
+                const depositSelect = row.querySelector('.deposit-select');
+                if (depositSelect) {
+                    const isPaid = depositSelect.value === 'true';
+                    if ((depositFilter === 'paid' && !isPaid) || (depositFilter === 'unpaid' && isPaid)) {
+                        show = false;
+                    }
                 }
             }
-        }
-        
-        // 毛坯状态筛选
-        if (blankFilter) {
-            const blankSelect = row.querySelector('.blank-select');
-            if (blankSelect) {
-                const isPurchased = blankSelect.value === 'true';
-                if ((blankFilter === 'purchased' && !isPurchased) || (blankFilter === 'unpurchased' && isPurchased)) {
-                    show = false;
+            
+            // 含邮状态筛选
+            if (shippingFilter) {
+                const shippingSelect = row.querySelector('.shipping-select');
+                if (shippingSelect) {
+                    const isIncluded = shippingSelect.value === 'true';
+                    if ((shippingFilter === 'included' && !isIncluded) || (shippingFilter === 'not-included' && isIncluded)) {
+                        show = false;
+                    }
                 }
             }
-        }
-        
-        // 订单状态筛选
-        if (statusFilter) {
-            const statusSelect = row.querySelector('.status-select');
-            if (statusSelect && statusSelect.value !== statusFilter) {
-                show = false;
+            
+            // 毛坯状态筛选
+            if (blankFilter) {
+                const blankSelect = row.querySelector('.blank-select');
+                if (blankSelect) {
+                    const isPurchased = blankSelect.value === 'true';
+                    if ((blankFilter === 'purchased' && !isPurchased) || (blankFilter === 'unpurchased' && isPurchased)) {
+                        show = false;
+                    }
+                }
+            }
+            
+            // 订单状态筛选
+            if (statusFilter) {
+                const statusSelect = row.querySelector('.status-select');
+                if (statusSelect && statusSelect.value !== statusFilter) {
+                    show = false;
+                }
             }
         }
         
@@ -846,10 +856,16 @@ function clearFilters() {
     document.getElementById('blankFilter').value = '';
     document.getElementById('statusFilter').value = '';
     
-    // 显示所有行
+    // 重新应用已完成订单的显示状态
+    const showCompleted = document.getElementById('showCompleted').checked;
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach(row => {
-        row.style.display = '';
+        const isCompletedOrShipped = row.classList.contains('completed') || row.classList.contains('shipped');
+        if (isCompletedOrShipped && !showCompleted) {
+            row.style.display = 'none';
+        } else {
+            row.style.display = '';
+        }
     });
 }
 

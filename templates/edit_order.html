@@ -5,6 +5,10 @@
 {% block page_title %}编辑订单{% endblock %}
 
 {% block content %}
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+
+</head>
 <style>
 :root {
     --primary-color: #2563eb;
@@ -56,7 +60,7 @@
 }
 
 .form-control, .form-select {
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     padding: 0.75rem;
     transition: all 0.2s ease;
@@ -201,12 +205,91 @@
     border-color: #ffc107 !important;
     color: #856404 !important;
 }
+
+/* 下拉框选项颜色样式 */
+/* 定金状态选项颜色 */
+.deposit-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.deposit-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 毛坯状态选项颜色 */
+.blank-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.blank-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 含邮状态选项颜色 */
+.shipping-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.shipping-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 平台选择框选项颜色 */
+.contact-select option[value="QQ"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.contact-select option[value="微信"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.contact-select option[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* 订单状态选项颜色 */
+.status-select option[value="待制作"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.status-select option[value="制作中"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.status-select option[value="已完成"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.status-select option[value="已发货"] {
+    background-color: #d1ecf1 !important;
+    color: #0c5460 !important;
+}
+.status-select option[value="已取消"] {
+    background-color: #f5c6cb !important;
+    color: #721c24 !important;
+}
+
+/* 蛋糕盒选项颜色 */
+.cake-box-select option[value="需要"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.cake-box-select option[value="不需要"] {
+    background-color: #e2e3e5 !important;
+    color: #495057 !important;
+}
 </style>
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="dashboard-card">
             <div class="card-header-custom">
-                <h4><i class="bi bi-pencil"></i> 编辑订单 - {{ order.cn }} - {{order.character}}</h4>
+                <h4><i class="bi bi-pencil"></i><i class="fa-brands fa-github"></i>
+    <i class="fa-solid fa-plus"></i>
+    <i class="fa-solid fa-edit"></i> 编辑订单 - {{ order.cn }} - {{order.character}}</h4>
             </div>
             <div class="card-body p-4">
                 <form method="POST">
@@ -215,14 +298,12 @@
                             <div class="mb-3">
                                 <label for="cn" class="form-label">CN (Coser Name) <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="cn" name="cn" value="{{ order.cn }}" required>
-                                <div class="form-text">客户的Coser名称</div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="character" class="form-label">动漫角色 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="character" name="character" value="{{ order.character }}" required>
-                                <div class="form-text">需要制作的角色名称</div>
                             </div>
                         </div>
                     </div>
@@ -232,11 +313,10 @@
                             <div class="mb-3">
                                 <label for="contact" class="form-label">平台 <span class="text-danger">*</span></label>
                                 <select class="form-select contact-select" id="contact" name="contact" required onchange="updateSelectColors()">
-                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}><i class="fab fa-qq"></i> QQ</option>
+                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
                                     <option value="微信" {{ 'selected' if order.contact == '微信' }}><i class="fab fa-weixin"></i> 微信</option>
-                                    <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}><i class="fas fa-fish"></i> 闲鱼</option>     
+                                    <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xf015; 闲鱼</option>     
                                 </select>
-                                <div class="form-text">客户使用的联系平台</div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -246,7 +326,6 @@
                                     <span class="input-group-text">¥</span>
                                     <input type="number" class="form-control" id="final_amount" name="final_amount" step="0.01" min="0" value="{{ order.final_amount }}" required>
                                 </div>
-                                <div class="form-text">客户需要支付的尾款金额</div>
                             </div>
                         </div>
                     </div>
@@ -256,14 +335,12 @@
                             <div class="mb-3">
                                 <label for="needed_date" class="form-label">客户排单 <span class="text-danger">*</span></label>
                                 <input type="date" class="form-control" id="needed_date" name="needed_date" value="{{ order.needed_date.strftime('%Y-%m-%d') }}" required>
-                                <div class="form-text">客户希望收到假发的日期</div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="order_date" class="form-label">ddl <span class="text-danger">*</span></label>
                                 <input type="date" class="form-control" id="order_date" name="order_date" value="{{ order.order_date.strftime('%Y-%m-%d') }}" required>
-                                <div class="form-text">客户下单的日期</div>
                             </div>
                         </div>
                     </div>
@@ -280,6 +357,15 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
+                                <label for="blank_purchased" class="form-label">毛坯状态</label>
+                                <select class="form-select blank-select" id="blank_purchased" name="blank_purchased" onchange="updateSelectColors()">
+                                    <option value="false" {{ 'selected' if not order.blank_purchased else '' }}>未购</option>
+                                    <option value="true" {{ 'selected' if order.blank_purchased else '' }}>已购</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
                                 <label for="cake_box" class="form-label">蛋糕盒</label>
                                 <select class="form-select cake-box-select" id="cake_box" name="cake_box" onchange="updateSelectColors()">
                                     <option value="不需要" {{ 'selected' if order.cake_box == '不需要' }}>不需要</option>
@@ -287,9 +373,6 @@
                                 </select>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="status" class="form-label">订单状态</label>
@@ -302,9 +385,6 @@
                                 </select>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="deposit_paid" class="form-label">定金状态</label>
@@ -314,15 +394,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="blank_purchased" class="form-label">毛坯状态</label>
-                                <select class="form-select blank-select" id="blank_purchased" name="blank_purchased" onchange="updateSelectColors()">
-                                    <option value="false" {{ 'selected' if not order.blank_purchased else '' }}>未购</option>
-                                    <option value="true" {{ 'selected' if order.blank_purchased else '' }}>已购</option>
-                                </select>
-                            </div>
-                        </div>
+                        
                     </div>
 
                     <!-- 订单信息摘要 -->

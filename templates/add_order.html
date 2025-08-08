@@ -131,13 +131,90 @@
 .text-danger {
     color: var(--danger-color) !important;
 }
+
+/* 下拉框选项颜色样式 */
+/* 平台选择框选项颜色 */
+.contact-select option[value="QQ"] {
+    background-color: #e3f2fd !important;
+    color: #2196f3 !important;
+}
+.contact-select option[value="微信"] {
+    background-color: #e8f5e8 !important;
+    color: #4caf50 !important;
+}
+.contact-select option[value="闲鱼"] {
+    background-color: #fff3e0 !important;
+    color: #ff9800 !important;
+}
+
+/* 定金状态选项颜色 */
+.deposit-select option[value="true"] {
+    background-color: #e8f5e8 !important;
+    color: #4caf50 !important;
+}
+.deposit-select option[value="false"] {
+    background-color: #ffebee !important;
+    color: #f44336 !important;
+}
+
+/* 含邮状态选项颜色 */
+.shipping-select option[value="true"] {
+    background-color: #e8f5e8 !important;
+    color: #4caf50 !important;
+}
+.shipping-select option[value="false"] {
+    background-color: #fff3e0 !important;
+    color: #ff9800 !important;
+}
+
+/* 毛坯状态选项颜色 */
+.blank-select option[value="true"] {
+    background-color: #e8f5e8 !important;
+    color: #4caf50 !important;
+}
+.blank-select option[value="false"] {
+    background-color: #ffebee !important;
+    color: #f44336 !important;
+}
+
+/* 蛋糕盒选项颜色 */
+.cake-box-select option[value="需要"] {
+    background-color: #e3f2fd !important;
+    color: #2196f3 !important;
+}
+.cake-box-select option[value="不需要"] {
+    background-color: #f3e5f5 !important;
+    color: #9c27b0 !important;
+}
+
+/* 订单状态选项颜色 */
+.status-select option[value="待制作"] {
+    background-color: #fff3e0 !important;
+    color: #ff9800 !important;
+}
+.status-select option[value="制作中"] {
+    background-color: #e3f2fd !important;
+    color: #2196f3 !important;
+}
+.status-select option[value="已完成"] {
+    background-color: #e8f5e8 !important;
+    color: #4caf50 !important;
+}
+.status-select option[value="已发货"] {
+    background-color: #e1f5fe !important;
+    color: #00bcd4 !important;
+}
+.status-select option[value="已取消"] {
+    background-color: #ffebee !important;
+    color: #f44336 !important;
+}
 </style>
 
 <div class="row justify-content-center">
     <div class="col-md-10 col-lg-8">
         <div class="dashboard-card">
             <div class="card-header-custom">
-                <h4><i class="bi bi-plus-circle"></i> 添加新订单</h4>
+                <h4><i class="bi bi-plus-circle"> 添加新订单</h4>
             </div>
             <div class="card-body" style="padding: 2rem;">
                 <form method="POST">

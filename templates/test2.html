@@ -1,0 +1,78 @@
+<h2 align=center>option下拉菜单选项中添加图片（原创）</h2>
+<h3 align=center>作者 neweroica</h3>
+<h3 align=center>2002-11-21 14:33</h3>
+<script>
+//*****************************************************************
+//
+//                   作者 neweroica
+//                  2002-11-21 14:33
+//               欢迎大家引用，但请保留此版权信息，谢谢！
+//
+//******************************************************************
+var h=0;
+
+function doSelect(id){
+  if(h%2==0)
+    list.style.display='';
+  else
+    list.style.display='none';
+  h++;
+  eval('title.innerHTML=title_'+id+'.value');
+}
+function selectList(imgSrc,i,id){
+  title.innerHTML='<img src='+imgSrc+'>';
+    eval('value_'+id+'.value='+(i+1));
+}
+function endSelect(){
+  list.style.display='none';
+  h=0;
+}
+function chBg(){
+  if(h%2==0)
+    list.style.display='';
+  else
+    list.style.display='none';
+  h++;
+}
+function build(id,title,left,top,width,height,images){
+  dw=document.write;
+  dw('<input type=hidden id=title_'+id+' value='+title+'>');
+  dw('<input type=hidden id=value_'+id+' value=0>');
+  dw('<table width='+width+' height='+height+' cellspacing=0 cellpadding=0 style="position:absolute;left:'+left+';top:'+top+';border:1px solid #000000;">');
+  dw('<tr><td id=title>'+title+'</td></tr></table>');
+  dw('<table id=list width='+width+' height='+height+'  cellpadding=0 cellspacing=0 style="position:absolute;left:'+left+';top:'+(top+height)+';border:1px solid #000000;display:none;">');
+
+  for(var i=0;i<images.length;i++){
+    dw('<tr><td onmouseover=this.style.backgroundColor="#000088"; onmouseout=this.style.backgroundColor="#ffffff"; onblur=selectList("'+images[i]+'",'+i+',"'+id+'")><img src='+images[i]+'></td></tr>');
+ }
+  dw('</table><input type=image src=http://202.112.86.128/studentspace/aqyw/js/option/sltBtn.gif style="position:absolute;left:'+(left+width-17)+';top:'+(top+2)+';" onclick=doSelect("'+id+'") onblur=endSelect()>');
+}
+
+//********************************************************************************
+
+//这里是下拉菜单中的各个图片路径
+var img=new Array(
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-08-07 173928.png",
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-08-06 161752.png",
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-07-30 152545.png",
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-08-07 174019.png",
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-08-07 174038.png",
+                   "C:\\Users\\laigsh\\Pictures\\Screenshots\\屏幕截图 2025-08-07 174057.png",
+
+                  );
+
+//建立一个下拉菜单
+build('myOption','请选择图象',400,150,100,20,img); //各参数的意义：id,title,left,top,width,height,images
+
+//**********************************************************************************
+</script>
+
+
+<!--下面是测试选择的索引值-->
+<br><br><br><br><br><br><br><br><div align=center>当前选项<input id=optInd size=5 value=0></div>
+<script>
+function chk(){
+  optInd.value=value_myOption.value;
+  setTimeout("chk()",500);
+}chk();
+</script>
