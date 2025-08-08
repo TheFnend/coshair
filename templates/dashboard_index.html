@@ -15,40 +15,378 @@
 
 {% block page_title %}订单列表{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ==================== 订单行背景色样式 ==================== */
+
+/* 表格内容居中 */
+.table tbody td {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+.table thead th {
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* 按钮圆角 */
+.btn {
+    border-radius: 8px !important;
+}
+
+/* 下拉框圆角样式 */
+.form-select {
+    border-radius: 8px !important;
+}
+
+/* 修复鼠标悬停时保持原有颜色 */
+.table tbody tr:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.expired:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.expired:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.very-urgent:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.very-urgent:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.urgent:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.urgent:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.completed:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.completed:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.shipped:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.shipped:hover td {
+    color: inherit !important;
+}
+
+.table tbody tr.overdue:hover {
+    background-color: inherit !important;
+}
+
+.table tbody tr.overdue:hover td {
+    color: inherit !important;
+}
+
+/* 逾期订单 - 红色背景 */
+.table tbody tr.expired:nth-child(even) {
+    background-color: rgba(220, 53, 69, 0.8) !important;
+    color: white !important;
+}
+
+.table tbody tr.expired:nth-child(odd) {
+    background-color: rgba(220, 53, 69, 0.9) !important;
+    color: white !important;
+}
+
+/* 三天内订单 - 淡红色背景斑马线 */
+.table tbody tr.very-urgent:nth-child(even) {
+    background-color: rgba(248, 215, 218, 0.7) !important;
+    color: #721c24 !important;
+}
+
+.table tbody tr.very-urgent:nth-child(odd) {
+    background-color: rgba(248, 215, 218, 0.9) !important;
+    color: #721c24 !important;
+}
+
+/* 七天内订单 - 淡黄色背景斑马线 */
+.table tbody tr.urgent:nth-child(even) {
+    background-color: rgba(255, 243, 205, 0.7) !important;
+    color: #856404 !important;
+}
+
+.table tbody tr.urgent:nth-child(odd) {
+    background-color: rgba(255, 243, 205, 0.9) !important;
+    color: #856404 !important;
+}
+
+/* 已完成订单 - 浅绿色背景斑马线 */
+.table tbody tr.completed:nth-child(even) {
+    background-color: rgba(212, 237, 218, 0.7) !important;
+    color: #155724 !important;
+}
+
+.table tbody tr.completed:nth-child(odd) {
+    background-color: rgba(212, 237, 218, 0.9) !important;
+    color: #155724 !important;
+}
+
+/* 已发货订单 - 淡蓝色背景斑马线 */
+.table tbody tr.shipped:nth-child(even) {
+    background-color: rgba(209, 236, 241, 0.7) !important;
+    color: #0c5460 !important;
+}
+
+.table tbody tr.shipped:nth-child(odd) {
+    background-color: rgba(209, 236, 241, 0.9) !important;
+    color: #0c5460 !important;
+}
+
+/* 其他订单 - 默认白色背景 */
+.table tbody tr.overdue:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    color: #333 !important;
+}
+
+.table tbody tr.overdue:nth-child(odd) {
+    background-color: rgba(248, 249, 250, 0.8) !important;
+    color: #333 !important;
+}
+
+/* ==================== 下拉选择框颜色样式 ==================== */
+
+/* 定金状态颜色 */
+.deposit-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.deposit-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 平台选择框选项颜色 */
+.contact-select option[value="QQ"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.contact-select option[value="微信"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.contact-select option[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* 订单状态选项颜色 */
+.status-select option[value="待制作"] {
+    background-color: #e2e3e5 !important;
+    color: #495057 !important;
+}
+.status-select option[value="制作中"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.status-select option[value="已完成"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.status-select option[value="已发货"] {
+    background-color: #d1ecf1 !important;
+    color: #0c5460 !important;
+}
+.status-select option[value="已取消"] {
+    background-color: #f5c6cb !important;
+    color: #721c24 !important;
+}
+
+/* 蛋糕盒选项颜色 */
+.cake-box-select option[value="不需要"] {
+    background-color: #e2e3e5 !important;
+    color: #495057 !important;
+}
+.cake-box-select option[value="需要"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* 毛坯状态颜色 */
+.blank-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.blank-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 含邮状态颜色 */
+.shipping-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.shipping-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 平台选择框颜色 */
+.contact-select option[value="QQ"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.contact-select option[value="微信"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.contact-select option[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* 状态选择框颜色 */
+.status-select option[value="待制作"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.status-select option[value="制作中"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.status-select option[value="已完成"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.status-select option[value="已发货"] {
+    background-color: #d1ecf1 !important;
+    color: #0c5460 !important;
+}
+.status-select option[value="已取消"] {
+    background-color: #f5c6cb !important;
+    color: #721c24 !important;
+}
+
+/* 蛋糕盒选择框颜色 */
+.cake-box-select option[value="需要"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.cake-box-select option[value="不需要"] {
+    background-color: #e2e3e5 !important;
+    color: #495057 !important;
+}
+
+/* 选择框根据选中值的背景色 */
+.deposit-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.deposit-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+
+.blank-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.blank-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+
+.shipping-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.shipping-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+
+.contact-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.contact-select[value="微信"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+.contact-select[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
+}
+
+.status-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.status-select[value="制作中"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
+}
+.status-select[value="已完成"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+.status-select[value="已发货"] {
+    background-color: #d1ecf1 !important;
+    border-color: #17a2b8 !important;
+    color: #0c5460 !important;
+}
+.status-select[value="已取消"] {
+    background-color: #f5c6cb !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+
+.cake-box-select {
+    background-color: #e2e3e5 !important;
+    border-color: #6c757d !important;
+    color: #495057 !important;
+}
+.cake-box-select[value="需要"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
-<!-- ==================== 背景设置面板 ==================== -->
-<div class="card mb-4" id="backgroundSettings" style="display: none;">
-    <div class="card-body">
-        <h5 class="card-title"><i class="bi bi-palette"></i> 背景设置</h5>
-        <div class="row">
-            <!-- 背景图片上传 -->
-            <div class="col-md-6">
-                <label for="backgroundImage" class="form-label">上传背景图片</label>
-                <input type="file" class="form-control" id="backgroundImage" accept="image/*" onchange="handleBackgroundUpload(event)">
-            </div>
-            <!-- 透明度调节 -->
-            <div class="col-md-3">
-                <label for="backgroundOpacity" class="form-label">透明度: <span id="opacityValue">50%</span></label>
-                <input type="range" class="form-range" id="backgroundOpacity" min="0" max="100" value="50" oninput="updateBackgroundOpacity(this.value)">
-            </div>
-            <!-- 移除背景按钮 -->
-            <div class="col-md-3">
-                <button class="btn btn-outline-danger" onclick="removeBackground()">
-                    <i class="bi bi-trash"></i> 移除背景
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <!-- ==================== 订单统计卡片 ==================== -->
 <div class="row mb-4">
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-blue" style="background: rgba(52, 152, 219, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(78, 171, 144, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: white;">
             <div class="card-body d-flex align-items-center">
                 <div class="stats-icon me-3">
-                    <i class="bi bi-list-ul"></i>
+                    <i class="bi bi-list-ul" style="font-size: 2.5rem;"></i>
                 </div>
                 <div class="stats-content">
                     <h5 class="stats-number mb-1">{{ orders|length }}</h5>
@@ -58,10 +396,10 @@
         </div>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-green" style="background: rgba(46, 204, 113, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(142, 162, 156, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: white;">
             <div class="card-body d-flex align-items-center">
                 <div class="stats-icon me-3">
-                    <i class="bi bi-cash-coin"></i>
+                    <i class="bi bi-cash-coin" style="font-size: 2.5rem;"></i>
                 </div>
                 <div class="stats-content">
                     <h5 class="stats-number mb-1">{{ orders|selectattr('deposit_paid')|list|length }}</h5>
@@ -71,9 +409,9 @@
         </div>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-orange" style="background: rgba(230, 126, 34, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(237, 221, 195, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: #333;">
             <div class="card-body d-flex align-items-center">
-                <div class="stats-icon me-3">
+                <div class="stats-icon me-3" style="font-size: 2.5rem;">
                     <i class="bi bi-currency-yen"></i>
                 </div>
                 <div class="stats-content">
@@ -84,9 +422,9 @@
         </div>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-purple" style="background: rgba(155, 89, 182, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(238, 191, 109, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: white;">
             <div class="card-body d-flex align-items-center">
-                <div class="stats-icon me-3">
+                <div class="stats-icon me-3" style="font-size: 2.5rem;">
                     <i class="bi bi-box"></i>
                 </div>
                 <div class="stats-content">
@@ -97,9 +435,9 @@
         </div>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-yellow" style="background: rgba(241, 196, 15, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(217, 79, 51, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: white;">
             <div class="card-body d-flex align-items-center">
-                <div class="stats-icon me-3">
+                <div class="stats-icon me-3" style="font-size: 2.5rem;">
                     <i class="bi bi-hourglass-split"></i>
                 </div>
                 <div class="stats-content">
@@ -110,9 +448,9 @@
         </div>
     </div>
     <div class="col-lg-2 col-md-4 col-sm-6 mb-3">
-        <div class="card stats-card gradient-card-teal" style="background: rgba(26, 188, 156, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
+        <div class="card stats-card" style="background: rgba(175, 101, 94, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); color: white;">
             <div class="card-body d-flex align-items-center">
-                <div class="stats-icon me-3">
+                <div class="stats-icon me-3" style="font-size: 2.5rem;">
                     <i class="bi bi-check-circle"></i>
                 </div>
                 <div class="stats-content">
@@ -136,9 +474,9 @@
                         <label class="form-label">平台</label>
                         <select class="form-select form-select-sm" id="platformFilter" onchange="applyFilters()">
                             <option value="">全部</option>
-                            <option value="QQ" {{ 'selected' if platform_filter == 'QQ' }}>QQ</option>
-                            <option value="微信" {{ 'selected' if platform_filter == '微信' }}>微信</option>
-                            <option value="闲鱼" {{ 'selected' if platform_filter == '闲鱼' }}>闲鱼</option>
+                            <option value="QQ" {{ 'selected' if platform_filter == 'QQ' }}><i class="fab fa-qq"></i> QQ</option>
+                            <option value="微信" {{ 'selected' if platform_filter == '微信' }}><i class="fab fa-weixin"></i> 微信</option>
+                            <option value="闲鱼" {{ 'selected' if platform_filter == '闲鱼' }}><i class="fas fa-fish"></i> 闲鱼</option>
                         </select>
                     </div>
                     <div class="col-md-2 mb-2">
@@ -186,7 +524,7 @@
                     <div class="col-12 text-end">
                         <div class="form-check form-switch d-inline-block me-3">
                             <input class="form-check-input" type="checkbox" id="showCompleted" 
-                                   {{ 'checked' if show_completed }} onchange="toggleCompleted()">
+                                   onchange="toggleCompleted()">
                             <label class="form-check-label" for="showCompleted">
                                 显示已完成订单
                             </label>
@@ -219,12 +557,12 @@
                 <th class="checkbox-column" style="width: 50px; display: none;">
                     <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
                 </th>
-                <th style="width: 80px;">CN</th>
+                <th style="width: 100px;">CN</th>
                 <th style="width: 100px;">角色</th>
                 <th style="width: 120px;">平台</th>
                 <th style="width: 100px;">排单</th>
                 <th style="width: 100px;">ddl</th>
-                <th style="width: 80px;">定金</th>
+                <th style="width: 100px;">定金</th>
                 <th style="width: 100px;">尾款</th>
                 <th style="width: 100px;">含邮</th>
                 <th style="width: 100px;">毛坯</th>
@@ -298,6 +636,7 @@
                         <a href="{{ url_for('dashboard_edit_order', id=order.id) }}" class="btn btn-outline-primary btn-sm">
                             <i class="bi bi-pencil"></i>
                         </a>
+                        &nbsp;
                         <a href="{{ url_for('delete_order', id=order.id) }}" 
                            class="btn btn-outline-danger btn-sm"
                            onclick="return confirm('确定要删除这个订单吗？')">
@@ -320,59 +659,6 @@
 {% endif %}
 
 
-<!-- 日历视图 -->
-<div class="mt-5">
-    <div class="card" style="background: rgba(255, 255, 255, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
-        <div class="card-body">
-            <h5 class="card-title mb-4"><i class="bi bi-calendar3"></i> 假发制作日历 <span id="calendar-month-count" class="badge ms-2" style="background-color: rgba(13, 110, 253, 0.15); color: #0d6efd; border: 1px solid rgba(13, 110, 253, 0.3); font-weight: 500;"></span></h5>
-            <div id="calendar-container">
-                <div class="calendar-header d-flex justify-content-between align-items-center mb-3">
-                    <button class="btn btn-outline-primary btn-sm" onclick="changeMonth(-1)">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
-                    <h6 id="calendar-month-year" class="mb-0"></h6>
-                    <button class="btn btn-outline-primary btn-sm" onclick="changeMonth(1)">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                </div>
-                <div class="calendar-grid">
-                    <div class="calendar-weekdays">
-                        <div class="calendar-weekday">日</div>
-                        <div class="calendar-weekday">一</div>
-                        <div class="calendar-weekday">二</div>
-                        <div class="calendar-weekday">三</div>
-                        <div class="calendar-weekday">四</div>
-                        <div class="calendar-weekday">五</div>
-                        <div class="calendar-weekday">六</div>
-                    </div>
-                    <div id="calendar-days" class="calendar-days">
-                        <!-- 日历日期将通过JavaScript生成 -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 图例说明 -->
-<div class="mt-4">
-    <div class="card" style="background: rgba(255, 255, 255, 0.85); border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);">
-        <div class="card-body">
-            <h6 class="card-title mb-3"><i class="bi bi-palette"></i> 颜色说明</h6>
-            <div class="row">
-                <div class="col-12">
-                    <span class="legend-item legend-item-overdue"><i class="bi bi-emoji-angry"></i> 逾期</span>
-                    <span class="legend-item legend-item-very-urgent"><i class="bi bi-emoji-dizzy"></i> 紧急（3天内）</span>
-                    <span class="legend-item legend-item-urgent"><i class="bi bi-emoji-frown"></i> 较急（7天内）</span>
-                    <span class="legend-item legend-item-completed"><i class="bi bi-emoji-sunglasses"></i> 已完成 </span>
-                    <span class="legend-item legend-item-wait"><i class="bi bi-emoji-neutral"></i> 待制作</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-
 
 {% endblock %}
 
@@ -386,104 +672,25 @@ let orders = {{ orders_json|safe }};
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     updateSelectColors();
-    generateCalendar();
-    updateCalendarMonthCount();
     
-    // 初始化已完成订单的显示状态
+    // 默认隐藏已完成和已发货的订单
     const showCompleted = document.getElementById('showCompleted').checked;
-    toggleCompletedOrders(showCompleted);
+    if (!showCompleted) {
+        toggleCompletedOrders(false);
+    }
 });
 
-// ==================== 背景设置功能 ====================
-
-// 切换背景设置面板显示
-function toggleBackgroundSettings() {
-    const panel = document.getElementById('backgroundSettings');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-}
-
-// 处理背景图片上传
-function handleBackgroundUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const imageUrl = e.target.result;
-            setBackgroundImage(imageUrl);
-            // 保存到localStorage
-            localStorage.setItem('backgroundImage', imageUrl);
-            localStorage.setItem('backgroundOpacity', document.getElementById('backgroundOpacity').value);
-        };
-        reader.readAsDataURL(file);
-    }
-}
-
-// 设置背景图片
-function setBackgroundImage(imageUrl) {
-    const opacity = document.getElementById('backgroundOpacity').value / 100;
-    document.body.style.backgroundImage = `url(${imageUrl})`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
-    document.body.style.backgroundRepeat = 'no-repeat';
-    document.body.style.backgroundAttachment = 'fixed';
-    
-    // 添加半透明遮罩
-    let overlay = document.querySelector('.background-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'background-overlay';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, ${1 - opacity});
-            pointer-events: none;
-            z-index: -1;
-        `;
-        document.body.appendChild(overlay);
-    } else {
-        overlay.style.background = `rgba(255, 255, 255, ${1 - opacity})`;
-    }
-}
-
-// 更新背景透明度
-function updateBackgroundOpacity(value) {
-    document.getElementById('opacityValue').textContent = value + '%';
-    const overlay = document.querySelector('.background-overlay');
-    if (overlay) {
-        overlay.style.background = `rgba(255, 255, 255, ${1 - value / 100})`;
-    }
-    // 保存到localStorage
-    localStorage.setItem('backgroundOpacity', value);
-}
-
-// 移除背景
-function removeBackground() {
-    document.body.style.backgroundImage = 'none';
-    const overlay = document.querySelector('.background-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
-    // 清除localStorage
-    localStorage.removeItem('backgroundImage');
-    localStorage.removeItem('backgroundOpacity');
-    // 重置文件输入
-    document.getElementById('backgroundImage').value = '';
-}
+// ==================== 背景设置功能（简化版，仅用于加载已保存的背景） ====================
 
 // 页面加载时恢复背景设置
 window.addEventListener('load', function() {
     const savedImage = localStorage.getItem('backgroundImage');
-    const savedOpacity = localStorage.getItem('backgroundOpacity');
+    const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
     
     if (savedImage) {
-        setBackgroundImage(savedImage);
-        if (savedOpacity) {
-            document.getElementById('backgroundOpacity').value = savedOpacity;
-            document.getElementById('opacityValue').textContent = savedOpacity + '%';
-        }
+        const opacityValue = savedOpacity / 100;
+        document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
+        document.documentElement.style.setProperty('--bg-opacity', opacityValue);
     }
 });
 
@@ -491,15 +698,15 @@ window.addEventListener('load', function() {
 
 // 更新订单字段
 function updateOrderField(orderId, field, value) {
+    const data = {};
+    data[field] = value;
+    
     fetch(`/api/update_order/${orderId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            field: field,
-            value: value
-        })
+        body: JSON.stringify(data)
     })
     .then(response => response.json())
     .then(data => {
@@ -510,6 +717,8 @@ function updateOrderField(orderId, field, value) {
             if (order) {
                 order[field] = value;
             }
+            // 更新下拉框颜色
+            updateSelectColors();
         } else {
             alert('更新失败: ' + data.message);
         }
@@ -524,70 +733,40 @@ function updateOrderField(orderId, field, value) {
 function updateSelectColors() {
     // 平台选择框颜色
     document.querySelectorAll('.contact-select').forEach(select => {
+        // 移除所有颜色类
         select.className = 'form-select form-select-sm contact-select';
-        if (select.value === 'QQ') {
-            select.classList.add('contact-qq');
-        } else if (select.value === '微信') {
-            select.classList.add('contact-wechat');
-        } else if (select.value === '闲鱼') {
-            select.classList.add('contact-xianyu');
-        }
+        // 根据选中值设置属性，CSS会根据属性值应用样式
+        select.setAttribute('value', select.value);
     });
     
     // 定金状态颜色
     document.querySelectorAll('.deposit-select').forEach(select => {
         select.className = 'form-select form-select-sm deposit-select';
-        if (select.value === 'true') {
-            select.classList.add('deposit-paid');
-        } else {
-            select.classList.add('deposit-unpaid');
-        }
+        select.setAttribute('value', select.value);
     });
     
     // 含邮状态颜色
     document.querySelectorAll('.shipping-select').forEach(select => {
         select.className = 'form-select form-select-sm shipping-select';
-        if (select.value === 'true') {
-            select.classList.add('shipping-included');
-        } else {
-            select.classList.add('shipping-not-included');
-        }
+        select.setAttribute('value', select.value);
     });
     
     // 毛坯状态颜色
     document.querySelectorAll('.blank-select').forEach(select => {
         select.className = 'form-select form-select-sm blank-select';
-        if (select.value === 'true') {
-            select.classList.add('blank-purchased');
-        } else {
-            select.classList.add('blank-unpurchased');
-        }
+        select.setAttribute('value', select.value);
     });
     
     // 蛋糕盒状态颜色
     document.querySelectorAll('.cake-box-select').forEach(select => {
         select.className = 'form-select form-select-sm cake-box-select';
-        if (select.value === '需要') {
-            select.classList.add('cake-box-needed');
-        } else {
-            select.classList.add('cake-box-not-needed');
-        }
+        select.setAttribute('value', select.value);
     });
     
     // 订单状态颜色
     document.querySelectorAll('.status-select').forEach(select => {
         select.className = 'form-select form-select-sm status-select';
-        if (select.value === '待制作') {
-            select.classList.add('status-pending');
-        } else if (select.value === '制作中') {
-            select.classList.add('status-in-progress');
-        } else if (select.value === '已完成') {
-            select.classList.add('status-completed');
-        } else if (select.value === '已发货') {
-            select.classList.add('status-shipped');
-        } else if (select.value === '已取消') {
-            select.classList.add('status-cancelled');
-        }
+        select.setAttribute('value', select.value);
     });
 }
 
@@ -799,104 +978,7 @@ function batchDelete() {
     });
 }
 
-// ==================== 日历功能 ====================
-
-// 生成日历
-function generateCalendar() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    // 更新月份年份显示
-    const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月',
-                       '七月', '八月', '九月', '十月', '十一月', '十二月'];
-    document.getElementById('calendar-month-year').textContent = `${year}年 ${monthNames[month]}`;
-    
-    // 获取当月第一天和最后一天
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay()); // 从周日开始
-    
-    const calendarDays = document.getElementById('calendar-days');
-    calendarDays.innerHTML = '';
-    
-    // 生成6周的日期
-    for (let week = 0; week < 6; week++) {
-        for (let day = 0; day < 7; day++) {
-            const currentDay = new Date(startDate);
-            currentDay.setDate(startDate.getDate() + week * 7 + day);
-            
-            const dayElement = document.createElement('div');
-            dayElement.className = 'calendar-day';
-            
-            // 判断是否是当前月份
-            if (currentDay.getMonth() !== month) {
-                dayElement.classList.add('other-month');
-            }
-            
-            // 判断是否是今天
-            const today = new Date();
-            if (currentDay.toDateString() === today.toDateString()) {
-                dayElement.classList.add('today');
-            }
-            
-            // 查找当天的订单
-            const dayOrders = orders.filter(order => {
-                const orderDate = new Date(order.needed_date);
-                return orderDate.toDateString() === currentDay.toDateString();
-            });
-            
-            // 设置日期内容
-            let dayContent = `<div class="calendar-date">${currentDay.getDate()}</div>`;
-            
-            if (dayOrders.length > 0) {
-                dayContent += '<div class="calendar-orders">';
-                dayOrders.forEach(order => {
-                    const today = new Date();
-                    const orderDate = new Date(order.needed_date);
-                    const daysLeft = Math.ceil((orderDate - today) / (1000 * 60 * 60 * 24));
-                    
-                    let urgencyClass = 'normal';
-                    if (order.status === '已完成' || order.status === '已发货') {
-                        urgencyClass = 'completed';
-                    } else if (daysLeft < 0) {
-                        urgencyClass = 'overdue';
-                    } else if (daysLeft <= 3) {
-                        urgencyClass = 'very-urgent';
-                    } else if (daysLeft <= 7) {
-                        urgencyClass = 'urgent';
-                    }
-                    
-                    dayContent += `<div class="calendar-order ${urgencyClass}" onclick="editOrder(${order.id})">${order.cn}</div>`;
-                });
-                dayContent += '</div>';
-            }
-            
-            dayElement.innerHTML = dayContent;
-            calendarDays.appendChild(dayElement);
-        }
-    }
-}
-
-// 切换月份
-function changeMonth(delta) {
-    currentDate.setMonth(currentDate.getMonth() + delta);
-    generateCalendar();
-    updateCalendarMonthCount();
-}
-
-// 更新日历月份订单数量
-function updateCalendarMonthCount() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    const monthOrders = orders.filter(order => {
-        const orderDate = new Date(order.needed_date);
-        return orderDate.getFullYear() === year && orderDate.getMonth() === month;
-    });
-    
-    document.getElementById('calendar-month-count').textContent = `${monthOrders.length} 个订单`;
-}
+// ==================== 编辑订单功能 ====================
 
 // 编辑订单
 function editOrder(orderId) {

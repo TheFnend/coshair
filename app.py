@@ -667,6 +667,18 @@ def timesheet():
                          month_hours=month_hours,
                          avg_daily_hours=avg_daily_hours)
 
+@app.route('/settings')
+def settings():
+    """
+    系统设置页面
+    
+    功能：
+    - 背景设置
+    - 系统配置
+    - 用户偏好设置
+    """
+    return render_template('settings.html')
+
 @app.context_processor
 def inject_today():
     """
