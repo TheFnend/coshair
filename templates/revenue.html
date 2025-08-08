@@ -343,12 +343,12 @@
                     <td><strong>¥{{ month_data.revenue }}</strong></td>
                     <td>¥{{ month_data.avg_value }}</td>
                     <td>
-                        {% if month_data.growth > 0 %}
+                        {% if month_data.growth|float > 0 %}
                             <span class="trend-indicator trend-up">
                                 <i class="bi bi-arrow-up"></i>
                                 +{{ month_data.growth }}%
                             </span>
-                        {% elif month_data.growth < 0 %}
+                        {% elif month_data.growth|float < 0 %}
                             <span class="trend-indicator trend-down">
                                 <i class="bi bi-arrow-down"></i>
                                 {{ month_data.growth }}%

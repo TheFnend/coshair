@@ -198,6 +198,39 @@ def edit_order(id):
     
     return render_template('edit_order.html', order=order)
 
+@app.route('/dashboard/edit/<int:id>', methods=['GET', 'POST'])
+def dashboard_edit_order(id):
+    """
+    Dashboard编辑订单路由
+    
+    GET: 显示编辑表单
+    POST: 更新订单信息并返回dashboard
+    """
+    order = Order.query.get_or_404(id)  # 获取订单或返回404
+    
+    if request.method == 'POST':
+        try:
+            # 更新订单字段
+            order.cn = request.form['cn']
+            order.character = request.form['character']
+            order.contact = request.form['contact']
+            order.needed_date = datetime.strptime(request.form['needed_date'], '%Y-%m-%d').date()
+            order.order_date = datetime.strptime(request.form['order_date'], '%Y-%m-%d').date()
+            order.deposit_paid = bool(request.form.get('deposit_paid'))
+            order.final_amount = float(request.form['final_amount'])
+            order.shipping_included = bool(request.form.get('shipping_included'))
+            order.blank_purchased = bool(request.form.get('blank_purchased'))
+            order.cake_box = request.form.get('cake_box', '不需要')
+            order.status = request.form['status']
+            
+            db.session.commit()
+            flash('订单更新成功！', 'success')
+            return redirect(url_for('dashboard_index'))
+        except Exception as e:
+            flash(f'更新失败：{str(e)}', 'error')
+    
+    return render_template('edit_order.html', order=order)
+
 @app.route('/delete/<int:id>')
 def delete_order(id):
     """
