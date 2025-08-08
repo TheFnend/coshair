@@ -11,7 +11,7 @@
 - RESTful API接口
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, date
@@ -678,6 +678,13 @@ def settings():
     - 用户偏好设置
     """
     return render_template('settings.html')
+
+@app.route('/fontawesome-free-7.0.0-web/<path:filename>')
+def fontawesome_static(filename):
+    """
+    提供FontAwesome静态文件
+    """
+    return send_from_directory('fontawesome-free-7.0.0-web', filename)
 
 @app.context_processor
 def inject_today():
