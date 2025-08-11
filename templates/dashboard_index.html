@@ -593,7 +593,7 @@
                 <td>{{ order.character }}</td>
                 <td>
                     <select class="form-select form-select-sm contact-select" onchange="updateOrderField({{ order.id }}, 'contact', this.value); updateSelectColors();">
-                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
+                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; &nbsp;QQ</option>
                                     <option value="微信" {{ 'selected' if order.contact == '微信' }}>&#xf1d7; 微信</option>
                                     <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xf578; 闲鱼</option>
                     </select>
