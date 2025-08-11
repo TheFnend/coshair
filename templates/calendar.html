@@ -4,254 +4,179 @@
 
 {% block extra_css %}
 <style>
-    .calendar-container {
-        background: var(--white-color);
-        border-radius: 25px;
-        padding: 30px;
-        box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
-    }
-
-    .calendar-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-        padding-bottom: 20px;
-        border-bottom: 2px solid #E6EFF5;
-    }
-
-    .calendar-nav {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .nav-btn {
-        width: 40px;
-        height: 40px;
-        border: none;
-        border-radius: 12px;
-        background: var(--light-color);
-        color: var(--secondary-color);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-        font-size: 16px;
-    }
-
-    .nav-btn:hover {
-        background: var(--primary-color);
-        color: white;
-        transform: translateY(-2px);
-    }
-
-    .calendar-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: var(--dark-color);
-        margin: 0;
-    }
-
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 1px;
-        background: #E6EFF5;
-        border-radius: 15px;
-        overflow: hidden;
-    }
-
-    .calendar-day-header {
-        background: var(--light-color);
-        padding: 15px 10px;
-        text-align: center;
-        font-weight: 600;
-        color: var(--secondary-color);
-        font-size: 14px;
-    }
-
-    .calendar-day {
-        background: var(--white-color);
-        min-height: 120px;
-        padding: 10px;
-        position: relative;
-        transition: all 0.3s ease;
-    }
-
-    .calendar-day:hover {
-        background: rgba(24, 20, 243, 0.02);
-    }
-
-    .calendar-day.other-month {
-        background: #F8F9FA;
-        color: #ADB5BD;
-    }
-
-    .calendar-day.today {
-        background: rgba(24, 20, 243, 0.1);
-        border: 2px solid var(--primary-color);
-    }
-
-    .day-number {
-        font-weight: 600;
-        font-size: 16px;
-        margin-bottom: 8px;
-        color: var(--dark-color);
-    }
-
-    .day-orders {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .order-item {
-        background: var(--primary-color);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 8px;
-        font-size: 11px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .order-item:hover {
-        transform: scale(1.05);
-        box-shadow: 0 2px 8px rgba(24, 20, 243, 0.3);
-    }
-
-    .order-item.urgent {
-        background: var(--warning-color);
-    }
-
-    .order-item.very-urgent {
-        background: var(--danger-color);
-        animation: pulse 2s infinite;
-    }
-
-    .order-item.completed {
-        background: var(--success-color);
-    }
-
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.7; }
-        100% { opacity: 1; }
-    }
-
-    .legend {
-        display: flex;
-        justify-content: center;
-        gap: 30px;
-        margin-top: 30px;
-        padding-top: 20px;
-        border-top: 2px solid #E6EFF5;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 14px;
-        color: var(--secondary-color);
-    }
-
-    .legend-color {
-        width: 16px;
-        height: 16px;
-        border-radius: 4px;
-    }
-
-    .stats-row {
-        margin-bottom: 30px;
-    }
-
-    .stat-card-small {
-        background: var(--white-color);
-        border-radius: 20px;
-        padding: 25px;
-        text-align: center;
-        box-shadow: 0 4px 18px 0 rgba(75, 70, 92, 0.1);
-        transition: all 0.3s ease;
-    }
-
-    .stat-card-small:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px 0 rgba(75, 70, 92, 0.15);
-    }
-
-    .stat-number {
-        font-size: 32px;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-
-    .stat-number.primary { color: var(--primary-color); }
-    .stat-number.warning { color: var(--warning-color); }
-    .stat-number.danger { color: var(--danger-color); }
-    .stat-number.success { color: var(--success-color); }
-
-    .stat-label {
-        color: var(--secondary-color);
-        font-size: 14px;
-        font-weight: 500;
-    }
+.calendar-container {
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.calendar-title-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.calendar-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 0;
+}
+.monthly-stats {
+    display: flex;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: #666;
+}
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+.nav-buttons {
+    display: flex;
+    gap: 8px;
+}
+.nav-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+.nav-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    color: white;
+}
+.nav-btn.today-btn {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+}
+.nav-btn.today-btn:hover {
+    box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+}
+.calendar-day-header {
+    text-align: center;
+    font-weight: 600;
+    color: #777;
+    padding: 8px 0;
+}
+.calendar-day {
+    position: relative;
+    min-height: 120px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid rgba(0,0,0,0.06);
+}
+.calendar-day.other-month { opacity: 0.5; }
+.calendar-day.today { outline: 2px solid var(--primary-color); }
+.calendar-day.drag-over { outline: 2px dashed var(--primary-color); background: rgba(13,110,253,0.06); }
+.day-number { position: absolute; top: 6px; right: 8px; font-size: 0.85rem; color: #666; }
+.day-orders { margin-top: 20px; display: flex; flex-direction: column; gap: 6px; }
+.order-item { 
+    font-size: 0.88rem; 
+    line-height: 1.2; 
+    background: rgba(0,0,0,0.04); 
+    border-radius: 6px; 
+    padding: 6px 8px; 
+    cursor: grab; 
+    user-select: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+.order-item:active { cursor: grabbing; }
+.order-item:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.order-item.completed { 
+    background: rgba(25,135,84,0.15); 
+    color: #155724; 
+    border-color: rgba(25,135,84,0.3);
+}
+.order-item.urgent { 
+    background: linear-gradient(135deg, rgba(255,193,7,0.25) 0%, rgba(255,193,7,0.15) 100%); 
+    color: #856404;
+    border-color: rgba(255,193,7,0.4);
+    font-weight: 500;
+}
+.order-item.very-urgent { 
+    background: linear-gradient(135deg, rgba(255,87,51,0.3) 0%, rgba(255,87,51,0.2) 100%); 
+    color: #d9534f;
+    border-color: rgba(255,87,51,0.5);
+    font-weight: 600;
+    box-shadow: 0 0 8px rgba(255,87,51,0.2);
+}
+.order-item.overdue { 
+    background: linear-gradient(135deg, rgba(220,20,60,0.4) 0%, rgba(220,20,60,0.25) 100%); 
+    color: #8b0000;
+    border-color: rgba(220,20,60,0.6);
+    font-weight: 700;
+    box-shadow: 0 0 12px rgba(220,20,60,0.3);
+    animation: pulse-urgent 2s infinite;
+}
+@keyframes pulse-urgent {
+    0% { box-shadow: 0 0 12px rgba(220,20,60,0.3); }
+    50% { box-shadow: 0 0 16px rgba(220,20,60,0.5); }
+    100% { box-shadow: 0 0 12px rgba(220,20,60,0.3); }
+}
+.legend { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-top: 15px; }
+.legend-item { 
+    display: flex; 
+    gap: 6px; 
+    align-items: center; 
+    font-size: 0.9rem; 
+    color: #555;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+.legend-color { width: 12px; height: 12px; border-radius: 3px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- 月度统计 -->
-<div class="stats-row">
-    <div class="row">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card-small">
-                <div class="stat-number primary">{{ current_month_orders|length }}</div>
-                <div class="stat-label">本月订单</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card-small">
-                <div class="stat-number warning">{{ urgent_orders|length }}</div>
-                <div class="stat-label">紧急订单</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card-small">
-                <div class="stat-number danger">{{ overdue_orders|length }}</div>
-                <div class="stat-label">逾期订单</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card-small">
-                <div class="stat-number success">{{ completed_orders|length }}</div>
-                <div class="stat-label">已完成</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 日历 -->
 <div class="calendar-container">
     <div class="calendar-header">
-        <div class="calendar-nav">
-            <button class="nav-btn" onclick="previousMonth()">
-                <i class="bi bi-chevron-left"></i>
-            </button>
-            <h2 class="calendar-title" id="calendarTitle">{{ current_date.strftime('%Y年%m月') }}</h2>
-            <button class="nav-btn" onclick="nextMonth()">
-                <i class="bi bi-chevron-right"></i>
-            </button>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="previousMonth()">上个月</button>
+            <button class="nav-btn today-btn" onclick="goToToday()">今天</button>
+            <button class="nav-btn" onclick="nextMonth()">下个月</button>
         </div>
-        <button class="btn btn-primary" onclick="goToToday()">
-            <i class="bi bi-calendar-today"></i> 今天
-        </button>
-    </div>
+        <div class="calendar-title-section">
+            <h2 class="calendar-title" id="calendarTitle">{{ current_date.strftime('%Y年%m月') }}</h2>
+            <div class="monthly-stats">
+                <div class="stat-item">本月订单：<span id="monthTotal">0</span></div>
+                <div class="stat-item" style="color:#155724;">已完成：<span id="monthCompleted">0</span></div>
+                <div class="stat-item" style="color:#8b0000;">逾期：<span id="monthOverdue">0</span></div>
+                <div class="stat-item" style="color:#d9534f;">紧急：<span id="monthVeryUrgent">0</span></div>
+                <div class="stat-item" style="color:#856404;">较急：<span id="monthUrgent">0</span></div>
+                <div class="stat-item" style="color:#b3b3b3;">待制作：<span id="monthShipped">0</span></div>
 
+            </div>
+        </div>
+        <div class="text-muted small">拖动订单卡片到其他日期以更改排单</div>
+    </div>
     <div class="calendar-grid" id="calendarGrid">
         <div class="calendar-day-header">周日</div>
         <div class="calendar-day-header">周一</div>
@@ -260,26 +185,13 @@
         <div class="calendar-day-header">周四</div>
         <div class="calendar-day-header">周五</div>
         <div class="calendar-day-header">周六</div>
-        <!-- 日历日期将通过JavaScript动态生成 -->
+        <!-- 日期单元格由JS生成 -->
     </div>
-
-    <div class="legend">
-        <div class="legend-item">
-            <div class="legend-color" style="background: var(--primary-color);"></div>
-            <span>正常订单</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: var(--warning-color);"></div>
-            <span>紧急订单 (≤7天)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: var(--danger-color);"></div>
-            <span>非常紧急 (≤3天)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: var(--success-color);"></div>
-            <span>已完成</span>
-        </div>
+    <div class="legend mt-3">
+        <div class="legend-item"><span class="legend-color" style="background: rgba(220,20,60,0.7);"></span><span>逾期</span></div>
+        <div class="legend-item"><span class="legend-color" style="background: rgba(255,87,51,0.6);"></span><span>紧急（3天内）</span></div>
+        <div class="legend-item"><span class="legend-color" style="background: rgba(255,193,7,0.7);"></span><span>较急（7天内）</span></div>
+        <div class="legend-item"><span class="legend-color" style="background: rgba(25,135,84,0.6);"></span><span>已完成</span></div>
     </div>
 </div>
 {% endblock %}
@@ -290,10 +202,40 @@
 const orders = {{ orders_json|safe }};
 let currentDate = new Date();
 
+// 简易Toast（依赖 bootstrap.bundle 已在基模中引入）
+function showToast(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.position = 'fixed';
+        container.style.top = '20px';
+        container.style.right = '20px';
+        container.style.zIndex = '2000';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'secondary'} border-0`;
+    toast.role = 'alert';
+    toast.ariaLive = 'assertive';
+    toast.ariaAtomic = 'true';
+    toast.style.minWidth = '260px';
+    toast.style.marginTop = '10px';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 2000 });
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
 // 生成日历
 function generateCalendar(year, month) {
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay());
     
@@ -302,8 +244,43 @@ function generateCalendar(year, month) {
     
     // 更新标题
     title.textContent = `${year}年${String(month + 1).padStart(2, '0')}月`;
+
+    // 统计当月订单数量（按 needed_date 所在月份）
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+    const stats = { total: 0, completed: 0, overdue: 0, veryUrgent: 0, urgent: 0, shipped: 0 };
+
+
+    orders.forEach(o => {
+        if (!o.needed_date) return;
+        const d = new Date(o.needed_date);
+        if (d >= monthStart && d <= monthEnd) {
+            stats.total++;
+            const daysLeft = Math.ceil((d - new Date()) / (1000*60*60*24));
+            if (o.status === '已完成' || o.status === '已发货') stats.completed++;
+            else if (daysLeft < 0) stats.overdue++;
+            else if (daysLeft <= 3) stats.veryUrgent++;
+            else if (daysLeft <= 7) stats.urgent++;
+            else stats.shipped++; 
+
+        }
+    });
+    const completedEl = document.getElementById('monthCompleted');
+    const totalEl = document.getElementById('monthTotal');
+    const overdueEl = document.getElementById('monthOverdue');
+    const veryUrgentEl = document.getElementById('monthVeryUrgent');
+    const urgentEl = document.getElementById('monthUrgent');
+    const shippedEl = document.getElementById('monthShipped');
+
+    if (totalEl) totalEl.textContent = stats.total;
+    if (completedEl) completedEl.textContent = stats.completed;
+    if (overdueEl) overdueEl.textContent = stats.overdue;
+    if (veryUrgentEl) veryUrgentEl.textContent = stats.veryUrgent;
+    if (urgentEl) urgentEl.textContent = stats.urgent;
+    if (shippedEl) shippedEl.textContent = stats.shipped;
+
     
-    // 清除现有日期
+    // 清除旧的日期单元格，保留表头
     const existingDays = calendarGrid.querySelectorAll('.calendar-day');
     existingDays.forEach(day => day.remove());
     
@@ -311,7 +288,6 @@ function generateCalendar(year, month) {
     for (let i = 0; i < 42; i++) {
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + i);
-        
         const dayElement = createDayElement(date, month);
         calendarGrid.appendChild(dayElement);
     }
@@ -321,80 +297,116 @@ function generateCalendar(year, month) {
 function createDayElement(date, currentMonth) {
     const dayDiv = document.createElement('div');
     dayDiv.className = 'calendar-day';
+
+    // 拖拽释放目标
+    dayDiv.dataset.date = date.toISOString().split('T')[0];
+    dayDiv.addEventListener('dragover', (e) => { e.preventDefault(); dayDiv.classList.add('drag-over'); });
+    dayDiv.addEventListener('dragleave', () => dayDiv.classList.remove('drag-over'));
+    dayDiv.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dayDiv.classList.remove('drag-over');
+        const orderId = e.dataTransfer.getData('text/order-id');
+        if (orderId) {
+            const newDate = dayDiv.dataset.date;
+            updateOrderDate(parseInt(orderId, 10), newDate);
+        }
+    });
     
-    // 判断是否为其他月份
+    // 非本月
     if (date.getMonth() !== currentMonth) {
         dayDiv.classList.add('other-month');
     }
-    
-    // 判断是否为今天
+    // 今天
     const today = new Date();
     if (date.toDateString() === today.toDateString()) {
         dayDiv.classList.add('today');
     }
-    
+
     // 日期数字
     const dayNumber = document.createElement('div');
     dayNumber.className = 'day-number';
     dayNumber.textContent = date.getDate();
     dayDiv.appendChild(dayNumber);
-    
-    // 订单容器
+
+    // 订单列表
     const ordersContainer = document.createElement('div');
     ordersContainer.className = 'day-orders';
-    
-    // 查找当天的订单
+
     const dateStr = date.toISOString().split('T')[0];
     const dayOrders = orders.filter(order => order.needed_date === dateStr);
-    
-    // 添加订单
+
     dayOrders.forEach(order => {
         const orderElement = document.createElement('div');
         orderElement.className = 'order-item';
         orderElement.textContent = `${order.cn} - ${order.character}`;
         orderElement.title = `${order.cn} - ${order.character}\n状态: ${order.status}\n平台: ${order.contact}`;
-        
-        // 根据紧急程度设置样式
-        const daysLeft = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
+
+        // 可拖拽
+        orderElement.draggable = true;
+        orderElement.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/order-id', String(order.id));
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        // 紧急程度样式（区分逾期/紧急/较急）
+        const daysLeft = Math.ceil((new Date(dateStr) - today) / (1000 * 60 * 60 * 24));
         if (order.status === '已完成' || order.status === '已发货') {
             orderElement.classList.add('completed');
         } else if (daysLeft < 0) {
-            orderElement.classList.add('very-urgent');
+            orderElement.classList.add('overdue');
         } else if (daysLeft <= 3) {
             orderElement.classList.add('very-urgent');
         } else if (daysLeft <= 7) {
             orderElement.classList.add('urgent');
         }
-        
-        // 点击跳转到编辑页面
-        orderElement.onclick = () => {
-            window.location.href = `/edit/${order.id}`;
-        };
-        
+
+        // 点击进入编辑
+        orderElement.onclick = () => { window.location.href = `/edit/${order.id}`; };
+
         ordersContainer.appendChild(orderElement);
     });
-    
+
     dayDiv.appendChild(ordersContainer);
     return dayDiv;
 }
 
-// 导航函数
+// 调用后端更新日期
+async function updateOrderDate(orderId, newDate) {
+    try {
+        const res = await fetch(`/api/update_order/${orderId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ needed_date: newDate })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const target = orders.find(o => o.id === orderId);
+            if (target) target.needed_date = newDate;
+            showToast('排单日期已更新', 'success');
+            generateCalendar(currentDate.getFullYear(), currentDate.getMonth());
+        } else {
+            showToast('更新失败: ' + (data.message || res.statusText), 'error');
+        }
+    } catch (err) {
+        showToast('网络错误', 'error');
+    }
+}
+
+// 月份导航
 function previousMonth() {
     currentDate.setMonth(currentDate.getMonth() - 1);
     generateCalendar(currentDate.getFullYear(), currentDate.getMonth());
 }
-
 function nextMonth() {
     currentDate.setMonth(currentDate.getMonth() + 1);
     generateCalendar(currentDate.getFullYear(), currentDate.getMonth());
 }
-
 function goToToday() {
     currentDate = new Date();
     generateCalendar(currentDate.getFullYear(), currentDate.getMonth());
 }
 
-// 页面加载完成后初始化日历
+// 初始化
 document.addEventListener('DOMContentLoaded', function() {
     generateCalendar(currentDate.getFullYear(), currentDate.getMonth());
 });

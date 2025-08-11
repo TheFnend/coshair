@@ -296,6 +296,8 @@ def api_update_order(id):
             order.shipping_included = data['shipping_included']
         if 'cake_box' in data:
             order.cake_box = data['cake_box']
+        if 'needed_date' in data:
+            order.needed_date = datetime.strptime(data['needed_date'], '%Y-%m-%d').date()
         
         db.session.commit()
         return jsonify({'success': True, 'message': '更新成功'})

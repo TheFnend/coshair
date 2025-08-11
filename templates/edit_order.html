@@ -156,11 +156,13 @@
     border-color: #dc3545 !important;
     color: #721c24 !important;
     font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
+    font-weight: 500;
 }
 .contact-select option {
     font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
-    font-weight: 900;
+    font-weight: 500;
 }
+
 .contact-select[value="微信"] {
     background-color: #d4edda !important;
     border-color: #28a745 !important;
@@ -170,6 +172,8 @@
     background-color: #fff3cd !important;
     border-color: #ffc107 !important;
     color: #856404 !important;
+    font-weight: 900 !important;
+
 }
 
 /* 状态选择框颜色 */
@@ -254,6 +258,7 @@
 .contact-select option[value="闲鱼"] {
     background-color: #fff3cd !important;
     color: #856404 !important;
+    font-weight: 900 !important;
 }
 
 /* 订单状态选项颜色 */
@@ -316,7 +321,7 @@
                             <div class="mb-3">
                                 <label for="contact" class="form-label">平台 <span class="text-danger">*</span></label>
                                 <select class="form-select contact-select" id="contact" name="contact" required onchange="updateSelectColors()">
-                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
+                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; &nbsp;QQ</option>
                                     <option value="微信" {{ 'selected' if order.contact == '微信' }}>&#xf1d7; 微信</option>
                                     <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xf578; 闲鱼</option>     
                                 </select>   
