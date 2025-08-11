@@ -59,8 +59,8 @@
     border: 2px solid var(--border-color);
     border-radius: 8px;
     padding: 0.75rem;
-    transition: all 0.3s ease;
-    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    background-color: #fff;
 }
 
 .form-control:focus, .form-select:focus {
@@ -69,27 +69,27 @@
     outline: none;
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-    border: none;
+.btn {
     border-radius: 8px;
     padding: 0.75rem 1.5rem;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
 }
 
 .btn-primary:hover {
+    background: var(--primary-hover);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-lg);
 }
 
 .btn-secondary {
     background: #6b7280;
-    border: none;
-    border-radius: 8px;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
+    color: white;
 }
 
 .btn-secondary:hover {
@@ -97,126 +97,205 @@
     transform: translateY(-1px);
 }
 
-/* 状态选择器样式 */
-.contact-select.qq { background-color: #e3f2fd; border-color: #2196f3; }
-.contact-select.wechat { background-color: #e8f5e8; border-color: #4caf50; }
-.contact-select.xianyu { background-color: #fff3e0; border-color: #ff9800; }
+.alert {
+    border-radius: 8px;
+    border: none;
+    padding: 1rem;
+}
 
-.deposit-select.paid { background-color: #e8f5e8; border-color: #4caf50; }
-.deposit-select.unpaid { background-color: #ffebee; border-color: #f44336; }
+.alert-info {
+    background: rgba(6, 182, 212, 0.1);
+    color: #0891b2;
+    border-left: 4px solid var(--info-color);
+}
 
-.shipping-select.included { background-color: #e8f5e8; border-color: #4caf50; }
-.shipping-select.not-included { background-color: #fff3e0; border-color: #ff9800; }
+/* 下拉选择框颜色样式 */
+/* 定金状态颜色 */
+.deposit-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.deposit-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
 
-.blank-select.purchased { background-color: #e8f5e8; border-color: #4caf50; }
-.blank-select.unpurchased { background-color: #ffebee; border-color: #f44336; }
+/* 毛坯状态颜色 */
+.blank-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.blank-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
 
-.cake-box-select.needed { background-color: #e3f2fd; border-color: #2196f3; }
-.cake-box-select.not-needed { background-color: #f3e5f5; border-color: #9c27b0; }
+/* 含邮状态颜色 */
+.shipping-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.shipping-select[value="true"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
 
-.status-select.pending { background-color: #fff3e0; border-color: #ff9800; }
-.status-select.in-progress { background-color: #e3f2fd; border-color: #2196f3; }
-.status-select.completed { background-color: #e8f5e8; border-color: #4caf50; }
-.status-select.shipped { background-color: #e1f5fe; border-color: #00bcd4; }
-.status-select.cancelled { background-color: #ffebee; border-color: #f44336; }
-
-.input-group-text {
-    background: var(--light-bg);
-    border: 2px solid var(--border-color);
-    border-right: none;
-    color: var(--text-muted);
+/* 平台选择框颜色 */
+.contact-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+    font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
+    font-weight: 500;
+}
+.contact-select option {
+    font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
     font-weight: 500;
 }
 
-.text-danger {
-    color: var(--danger-color) !important;
+.contact-select[value="微信"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+.contact-select[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
+    font-weight: 900 !important;
+
+}
+
+/* 状态选择框颜色 */
+.status-select {
+    background-color: #f8d7da !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+.status-select[value="制作中"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
+}
+.status-select[value="已完成"] {
+    background-color: #d4edda !important;
+    border-color: #28a745 !important;
+    color: #155724 !important;
+}
+.status-select[value="已发货"] {
+    background-color: #d1ecf1 !important;
+    border-color: #17a2b8 !important;
+    color: #0c5460 !important;
+}
+.status-select[value="已取消"] {
+    background-color: #f5c6cb !important;
+    border-color: #dc3545 !important;
+    color: #721c24 !important;
+}
+
+/* 蛋糕盒选择框颜色 */
+.cake-box-select {
+    background-color: #e2e3e5 !important;
+    border-color: #6c757d !important;
+    color: #495057 !important;
+}
+.cake-box-select[value="需要"] {
+    background-color: #fff3cd !important;
+    border-color: #ffc107 !important;
+    color: #856404 !important;
 }
 
 /* 下拉框选项颜色样式 */
-/* 平台选择框选项颜色 */
-.contact-select option[value="QQ"] {
-    background-color: #e3f2fd !important;
-    color: #2196f3 !important;
-}
-.contact-select option[value="微信"] {
-    background-color: #e8f5e8 !important;
-    color: #4caf50 !important;
-}
-.contact-select option[value="闲鱼"] {
-    background-color: #fff3e0 !important;
-    color: #ff9800 !important;
-}
-
 /* 定金状态选项颜色 */
 .deposit-select option[value="true"] {
-    background-color: #e8f5e8 !important;
-    color: #4caf50 !important;
+    background-color: #d4edda !important;
+    color: #155724 !important;
 }
 .deposit-select option[value="false"] {
-    background-color: #ffebee !important;
-    color: #f44336 !important;
-}
-
-/* 含邮状态选项颜色 */
-.shipping-select option[value="true"] {
-    background-color: #e8f5e8 !important;
-    color: #4caf50 !important;
-}
-.shipping-select option[value="false"] {
-    background-color: #fff3e0 !important;
-    color: #ff9800 !important;
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
 }
 
 /* 毛坯状态选项颜色 */
 .blank-select option[value="true"] {
-    background-color: #e8f5e8 !important;
-    color: #4caf50 !important;
+    background-color: #d4edda !important;
+    color: #155724 !important;
 }
 .blank-select option[value="false"] {
-    background-color: #ffebee !important;
-    color: #f44336 !important;
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
 }
 
-/* 蛋糕盒选项颜色 */
-.cake-box-select option[value="需要"] {
-    background-color: #e3f2fd !important;
-    color: #2196f3 !important;
+/* 含邮状态选项颜色 */
+.shipping-select option[value="true"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
 }
-.cake-box-select option[value="不需要"] {
-    background-color: #f3e5f5 !important;
-    color: #9c27b0 !important;
+.shipping-select option[value="false"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+/* 平台选择框选项颜色 */
+.contact-select option[value="QQ"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+.contact-select option[value="微信"] {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+}
+.contact-select option[value="闲鱼"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+    font-weight: 900 !important;
 }
 
 /* 订单状态选项颜色 */
 .status-select option[value="待制作"] {
-    background-color: #fff3e0 !important;
-    color: #ff9800 !important;
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
 }
 .status-select option[value="制作中"] {
-    background-color: #e3f2fd !important;
-    color: #2196f3 !important;
+    background-color: #fff3cd !important;
+    color: #856404 !important;
 }
 .status-select option[value="已完成"] {
-    background-color: #e8f5e8 !important;
-    color: #4caf50 !important;
+    background-color: #d4edda !important;
+    color: #155724 !important;
 }
 .status-select option[value="已发货"] {
-    background-color: #e1f5fe !important;
-    color: #00bcd4 !important;
+    background-color: #d1ecf1 !important;
+    color: #0c5460 !important;
 }
 .status-select option[value="已取消"] {
-    background-color: #ffebee !important;
-    color: #f44336 !important;
+    background-color: #f5c6cb !important;
+    color: #721c24 !important;
+}
+
+/* 蛋糕盒选项颜色 */
+.cake-box-select option[value="需要"] {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+.cake-box-select option[value="不需要"] {
+    background-color: #e2e3e5 !important;
+    color: #495057 !important;
 }
 </style>
-
 <div class="row justify-content-center">
-    <div class="col-md-10 col-lg-8">
+    <div class="col-md-8">
         <div class="dashboard-card">
             <div class="card-header-custom">
-                <h4><i class="bi bi-plus-circle"> 添加新订单</h4>
+                <h4><i class="fa-solid fa-plus"></i> 添加新订单</h4>
             </div>
-            <div class="card-body" style="padding: 2rem;">
+            <div class="card-body p-4">
                 <form method="POST">
                     <div class="row">
                         <div class="col-md-6">
@@ -239,10 +318,10 @@
                                 <label for="contact" class="form-label">平台 <span class="text-danger">*</span></label>
                                 <select class="form-select contact-select" id="contact" name="contact" required onchange="updateSelectColors()">
                                     <option value="">请选择平台</option>
-                                    <option value="QQ"><i class="fab fa-qq"></i> QQ</option>
-                                    <option value="微信"><i class="fab fa-weixin"></i> 微信</option>
-                                    <option value="闲鱼"><i class="fas fa-fish"></i> 闲鱼</option>
-                                </select>
+                                    <option value="QQ">&#xf1d6; &nbsp;QQ</option>
+                                    <option value="微信">&#xf1d7; 微信</option>
+                                    <option value="闲鱼">&#xf578; 闲鱼</option>     
+                                </select>   
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -274,15 +353,6 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="deposit_paid" class="form-label">定金状态</label>
-                                <select class="form-select deposit-select" id="deposit_paid" name="deposit_paid" onchange="updateSelectColors()">
-                                    <option value="false">未付</option>
-                                    <option value="true">已付</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
                                 <label for="shipping_included" class="form-label">尾款是否含邮</label>
                                 <select class="form-select shipping-select" id="shipping_included" name="shipping_included" required onchange="updateSelectColors()">
                                     <option value="false">否</option>
@@ -308,9 +378,6 @@
                                 </select>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="status" class="form-label">订单状态</label>
@@ -323,6 +390,16 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="deposit_paid" class="form-label">定金状态</label>
+                                <select class="form-select deposit-select" id="deposit_paid" name="deposit_paid" onchange="updateSelectColors()">
+                                    <option value="false">未付</option>
+                                    <option value="true">已付</option>
+                                </select>
+                            </div>
+                        </div>
+                        
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
@@ -342,84 +419,36 @@
 
 {% block scripts %}
 <script>
-// 更新下拉框颜色
+// 更新下拉选择框颜色
 function updateSelectColors() {
+    // 平台选择框颜色
+    document.querySelectorAll('.contact-select').forEach(select => {
+        select.setAttribute('value', select.value);
+    });
+    
     // 定金状态颜色
     document.querySelectorAll('.deposit-select').forEach(select => {
-        select.classList.remove('paid', 'unpaid');
-        if (select.value === 'true') {
-            select.classList.add('paid');
-        } else {
-            select.classList.add('unpaid');
-        }
+        select.setAttribute('value', select.value);
+    });
+    
+    // 含邮状态颜色
+    document.querySelectorAll('.shipping-select').forEach(select => {
+        select.setAttribute('value', select.value);
     });
     
     // 毛坯状态颜色
     document.querySelectorAll('.blank-select').forEach(select => {
-        select.classList.remove('purchased', 'unpurchased');
-        if (select.value === 'true') {
-            select.classList.add('purchased');
-        } else {
-            select.classList.add('unpurchased');
-        }
-    });
-    
-    // 邮费状态颜色
-    document.querySelectorAll('.shipping-select').forEach(select => {
-        select.classList.remove('included', 'not-included');
-        if (select.value === 'true') {
-            select.classList.add('included');
-        } else {
-            select.classList.add('not-included');
-        }
+        select.setAttribute('value', select.value);
     });
     
     // 蛋糕盒状态颜色
     document.querySelectorAll('.cake-box-select').forEach(select => {
-        select.classList.remove('needed', 'not-needed');
-        if (select.value === '需要') {
-            select.classList.add('needed');
-        } else {
-            select.classList.add('not-needed');
-        }
+        select.setAttribute('value', select.value);
     });
     
-    // 制作状态颜色
+    // 订单状态颜色
     document.querySelectorAll('.status-select').forEach(select => {
-        select.classList.remove('pending', 'in-progress', 'completed', 'shipped', 'cancelled');
-        switch(select.value) {
-            case '待制作':
-                select.classList.add('pending');
-                break;
-            case '制作中':
-                select.classList.add('in-progress');
-                break;
-            case '已完成':
-                select.classList.add('completed');
-                break;
-            case '已发货':
-                select.classList.add('shipped');
-                break;
-            case '已取消':
-                select.classList.add('cancelled');
-                break;
-        }
-    });
-    
-    // 平台状态颜色
-    document.querySelectorAll('.contact-select').forEach(select => {
-        select.classList.remove('qq', 'wechat', 'xianyu');
-        switch(select.value) {
-            case 'QQ':
-                select.classList.add('qq');
-                break;
-            case '微信':
-                select.classList.add('wechat');
-                break;
-            case '闲鱼':
-                select.classList.add('xianyu');
-                break;
-        }
+        select.setAttribute('value', select.value);
     });
 }
 

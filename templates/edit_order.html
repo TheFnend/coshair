@@ -358,8 +358,8 @@
                             <div class="mb-3">
                                 <label for="shipping_included" class="form-label">尾款是否含邮</label>
                                 <select class="form-select shipping-select" id="shipping_included" name="shipping_included" required onchange="updateSelectColors()">
-                                    <option value="true" {{ 'selected' if order.shipping_included else '' }}>是</option>
                                     <option value="false" {{ 'selected' if not order.shipping_included else '' }}>否</option>
+                                    <option value="true" {{ 'selected' if order.shipping_included else '' }}>是</option>
                                 </select>
                             </div>
                         </div>
