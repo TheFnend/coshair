@@ -245,14 +245,17 @@
 .contact-select option[value="QQ"] {
     background-color: #f8d7da !important;
     color: #721c24 !important;
+    font-weight: 500 !important;
 }
 .contact-select option[value="微信"] {
     background-color: #d4edda !important;
     color: #155724 !important;
+    font-weight: 500 !important;
 }
 .contact-select option[value="闲鱼"] {
     background-color: #fff3cd !important;
     color: #856404 !important;
+    font-weight: 501 !important;
 }
 
 /* 状态选择框颜色 */
@@ -325,6 +328,13 @@
     background-color: #f8d7da !important;
     border-color: #dc3545 !important;
     color: #721c24 !important;
+    font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif !important;
+    font-weight: 500 !important;
+}
+.contact-select[value="QQ"] {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+
 }
 .contact-select[value="微信"] {
     background-color: #d4edda !important;
@@ -335,6 +345,7 @@
     background-color: #fff3cd !important;
     border-color: #ffc107 !important;
     color: #856404 !important;
+    font-weight: 501 !important;
 }
 
 .status-select {
@@ -582,10 +593,9 @@
                 <td>{{ order.character }}</td>
                 <td>
                     <select class="form-select form-select-sm contact-select" onchange="updateOrderField({{ order.id }}, 'contact', this.value); updateSelectColors();">
-                                                        <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
+                                    <option value="QQ" {{ 'selected' if order.contact == 'QQ' }}>&#xf1d6; QQ</option>
                                     <option value="微信" {{ 'selected' if order.contact == '微信' }}>&#xf1d7; 微信</option>
                                     <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xf578; 闲鱼</option>
-                                    <option value="闲鱼" {{ 'selected' if order.contact == '闲鱼' }}>&#xf015; 闲鱼</option>   
                     </select>
                 </td>
                 <td>

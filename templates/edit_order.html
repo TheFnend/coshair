@@ -155,6 +155,11 @@
     background-color: #f8d7da !important;
     border-color: #dc3545 !important;
     color: #721c24 !important;
+    font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
+}
+.contact-select option {
+    font-family: "Font Awesome 7 Free", "Font Awesome 7 Brands", sans-serif;
+    font-weight: 900;
 }
 .contact-select[value="微信"] {
     background-color: #d4edda !important;
@@ -287,9 +292,7 @@
     <div class="col-md-8">
         <div class="dashboard-card">
             <div class="card-header-custom">
-                <h4><i class="bi bi-pencil"></i><i class="fa-brands fa-github"></i>
-    <i class="fa-solid fa-plus"></i>
-    <i class="fa-solid fa-edit"></i> 编辑订单 - {{ order.cn }} - {{order.character}}</h4>
+                <h4><i class="fa-solid fa-edit"></i> 编辑订单 - {{ order.cn }} - {{order.character}}</h4>
             </div>
             <div class="card-body p-4">
                 <form method="POST">
