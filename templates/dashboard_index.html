@@ -541,7 +541,7 @@
                             </label>
                         </div>
                         <button class="btn btn-outline-danger btn-sm" id="toggleBatchModeBtn" onclick="toggleBatchMode()">
-                            <i class="bi bi-check-square"></i> 批量操作
+                            <i class="bi bi-check-square"></i> 批量删除
                         </button>
                         <button class="btn btn-danger btn-sm" id="batchDeleteBtn" onclick="batchDelete()" style="display: none;">
                             <i class="bi bi-trash"></i> 批量删除
@@ -650,7 +650,7 @@
                         &nbsp;
                         <a href="{{ url_for('delete_order', id=order.id) }}" 
                            class="btn btn-outline-danger btn-sm"
-                           onclick="return confirm('确定要删除这个订单吗？')">
+                           onclick="return confirmSingleDelete('{{ url_for('delete_order', id=order.id) }}')">
                             <i class="bi bi-trash"></i>
                         </a>
                     </div>
@@ -722,7 +722,6 @@ function updateOrderField(orderId, field, value) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log('订单更新成功');
             // 更新本地orders数据
             const order = orders.find(o => o.id === orderId);
             if (order) {
@@ -730,13 +729,20 @@ function updateOrderField(orderId, field, value) {
             }
             // 更新下拉框颜色
             updateSelectColors();
+            // 显示成功提示
+            showToast('更新成功', 'success');
+            // 若状态改为已完成/已发货且当前未勾选显示已完成，则轻刷新
+            const showCompletedChecked = document.getElementById('showCompleted') ? document.getElementById('showCompleted').checked : true;
+            if (field === 'status' && (value === '已完成' || value === '已发货') && !showCompletedChecked) {
+                setTimeout(() => location.reload(), 1000);
+            }
         } else {
-            alert('更新失败: ' + data.message);
+            showToast('更新失败: ' + data.message, 'error');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('更新失败');
+        showToast('网络错误', 'error');
     });
 }
 
@@ -920,6 +926,8 @@ function toggleBatchMode() {
         toggleBtn.style.display = 'none';
         batchDeleteBtn.style.display = 'inline-block';
         cancelBtn.style.display = 'inline-block';
+        // 进入批量模式时重置按钮文案/状态
+        updateBatchDeleteBtn();
     } else {
         checkboxColumns.forEach(col => col.style.display = 'none');
         toggleBtn.style.display = 'inline-block';
@@ -928,13 +936,28 @@ function toggleBatchMode() {
         // 清除所有选择
         document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
         document.getElementById('selectAll').checked = false;
+        // 退出批量模式时重置按钮文案/状态
+        updateBatchDeleteBtn();
     }
 }
 
 // 取消批量模式
 function cancelBatchMode() {
     batchMode = false;
-    toggleBatchMode();
+    const checkboxColumns = document.querySelectorAll('.checkbox-column');
+    const toggleBtn = document.getElementById('toggleBatchModeBtn');
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    const cancelBtn = document.getElementById('cancelBatchModeBtn');
+    
+    checkboxColumns.forEach(col => col.style.display = 'none');
+    toggleBtn.style.display = 'inline-block';
+    batchDeleteBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
+    // 清除所有选择
+    document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAll').checked = false;
+    // 重置“批量删除”按钮文案/状态
+    updateBatchDeleteBtn();
 }
 
 // 全选/取消全选
@@ -971,45 +994,123 @@ function updateBatchDeleteBtn() {
 function batchDelete() {
     const checkedBoxes = document.querySelectorAll('.order-checkbox:checked');
     if (checkedBoxes.length === 0) {
-        alert('请选择要删除的订单');
+        showToast('请选择要删除的订单', 'error');
         return;
     }
     
-    if (!confirm(`确定要删除选中的 ${checkedBoxes.length} 个订单吗？`)) {
-        return;
-    }
-    
-    const orderIds = Array.from(checkedBoxes).map(cb => cb.value);
-    
-    fetch('/api/batch_delete', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            order_ids: orderIds
+    showDeleteConfirmation(checkedBoxes.length, () => {
+        const orderIds = Array.from(checkedBoxes).map(cb => cb.value);
+        
+        fetch('/api/batch_delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                order_ids: orderIds
+            })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            alert('删除失败: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('删除失败');
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast('删除失败: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('网络错误', 'error');
+        });
     });
 }
 
-// ==================== 编辑订单功能 ====================
+// 显示删除确认对话框
+function showDeleteConfirmation(count, onConfirm) {
+    // 创建确认对话框
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    `;
+    
+    dialog.innerHTML = `
+        <h5 style="margin: 0 0 15px 0; color: #dc3545;">确认删除</h5>
+        <p style="margin: 0 0 20px 0; color: #666;">确定要删除选中的 ${count} 个订单吗？此操作不可撤销。</p>
+        <div style="text-align: right;">
+            <button type="button" class="btn btn-secondary me-2" onclick="closeDeleteConfirmation()">取消</button>
+            <button type="button" class="btn btn-danger" onclick="confirmDelete()">确定删除</button>
+        </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // 添加全局函数
+    window.closeDeleteConfirmation = function() {
+        document.body.removeChild(overlay);
+        delete window.closeDeleteConfirmation;
+        delete window.confirmDelete;
+    };
+    
+    window.confirmDelete = function() {
+        onConfirm();
+        window.closeDeleteConfirmation();
+    };
+    
+    // 点击遮罩层关闭
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            window.closeDeleteConfirmation();
+        }
+    });
+}
 
 // 编辑订单
 function editOrder(orderId) {
     window.location.href = `/edit/${orderId}`;
+}
+// 显示提示消息
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+// 单个订单删除确认（使用自定义确认层）
+function confirmSingleDelete(url) {
+    showDeleteConfirmation(1, () => {
+        window.location.href = url;
+    });
+    return false; // 阻止默认跳转，等待用户确认
 }
 </script>
 {% endblock %}
