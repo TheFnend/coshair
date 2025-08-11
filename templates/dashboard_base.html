@@ -13,6 +13,9 @@
     <link href="/fontawesome-free-7.0.0-web/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet">
     
+    <!-- 网站图标 -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='头像_耀骑士临光.png') }}">
+    
     <style>
 
         .contact-select {
@@ -85,10 +88,19 @@
         }
 
         .sidebar-logo {
-            font-size: 25px;
+            font-size: 21px;
             font-weight: 800;
             color: var(--dark-color);
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sidebar-logo-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
         }
 
         .sidebar-nav {
@@ -309,7 +321,8 @@
     <div class="sidebar">
         <div class="sidebar-header">
             <a href="{{ url_for('index') }}" class="sidebar-logo">
-                <i class="bi bi-gem"></i> 07妙妙屋
+                <img src="{{ url_for('static', filename='头像_耀骑士临光.png') }}" alt="logo" class="sidebar-logo-icon">
+                07妙妙屋
             </a>
         </div>
         
@@ -374,7 +387,7 @@
                 <button class="notification-btn">
                     <i class="bi bi-bell"></i>
                 </button>
-                <img src="{{ url_for('static', filename='头像_耀骑士临光.png') }}" alt="用户头像" class="user-avatar">
+                <!-- <img src="{{ url_for('static', filename='头像_耀骑士临光.png') }}" alt="用户头像" class="user-avatar"> -->
             </div>
         </div>
 
