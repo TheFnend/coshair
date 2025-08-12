@@ -245,7 +245,12 @@
 const orders = {{ orders_json|safe }};
 let currentDate = new Date();
 
-// 简易Toast（依赖 bootstrap.bundle 已在基模中引入）
+/**
+ * 简易Toast（依赖 bootstrap.bundle 已在基模中引入）。
+ * 统一增加过渡动画，显示约2.5秒后触发 Bootstrap 的隐藏事件，并执行自定义淡出。
+ * @param {string} message - 提示文本
+ * @param {'success'|'error'|'secondary'|'info'} [type='info'] - 提示类型
+ */
 function showToast(message, type = 'info') {
     let container = document.getElementById('toast-container');
     if (!container) {
@@ -264,6 +269,8 @@ function showToast(message, type = 'info') {
     toast.ariaAtomic = 'true';
     toast.style.minWidth = '260px';
     toast.style.marginTop = '10px';
+    // 添加平滑的过渡动画
+    toast.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
     toast.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">${message}</div>
@@ -271,9 +278,20 @@ function showToast(message, type = 'info') {
         </div>
     `;
     container.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast, { delay: 2000 });
+    
+    // 使用更长的延迟时间和自定义淡出动画
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
     bsToast.show();
-    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    
+    // 自定义隐藏动画
+    toast.addEventListener('hide.bs.toast', () => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+    });
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        setTimeout(() => toast.remove(), 100); // 稍微延迟以确保动画完成
+    });
 }
 
 // 生成日历

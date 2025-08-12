@@ -1089,21 +1089,52 @@ function showDeleteConfirmation(count, onConfirm) {
 function editOrder(orderId) {
     window.location.href = `/edit/${orderId}`;
 }
-// 显示提示消息
+/**
+ * 显示提示消息（支持堆叠；显示3秒后开始渐隐并在0.5秒内移除）
+ * @param {string} message - 提示文本
+ * @param {'success'|'error'|'warning'|'info'} type - 提示类型，决定颜色样式
+ */
 function showToast(message, type) {
+    // 创建或获取提示容器
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        document.body.appendChild(container);
+    }
+    
+    // 创建新的提示元素
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'warning'} alert-dismissible fade show`;
+    toast.style.cssText = 'margin-bottom: 10px; min-width: 300px; transition: opacity 0.5s ease-out, transform 0.5s ease-out; opacity: 1; transform: translateX(0);';
     toast.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    document.body.appendChild(toast);
+    
+    // 添加到容器
+    container.appendChild(toast);
+    
+    // 2.5秒后开始淡出动画，然后移除
     setTimeout(() => {
         if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
+            // 开始淡出动画
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            
+            // 动画完成后移除元素
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+                // 如果容器为空，也移除容器
+                if (container.children.length === 0 && container.parentNode) {
+                    container.parentNode.removeChild(container);
+                }
+            }, 500); // 等待过渡动画完成
         }
-    }, 3000);
+    }, 3000); // 3秒后开始淡出
 }
 // 单个订单删除确认（使用自定义确认层）
 function confirmSingleDelete(url) {
