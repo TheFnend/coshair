@@ -19,6 +19,22 @@
 <style>
 /* ==================== 订单行背景色样式 ==================== */
 
+    .table-container {
+        transition: all 0.3s ease;
+    }
+
+    .table-container:hover {
+        transform: translateY(-5px);
+    }
+
+    .card {
+        transition: all 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-5px);
+    }
+
 /* 表格内容居中 */
 .table tbody td {
     text-align: center !important;
@@ -384,6 +400,34 @@
     border-color: #ffc107 !important;
     color: #856404 !important;
 }
+
+/* 统计卡片悬停互动效果 */
+.stats-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+.stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
+}
+.stats-card .stats-icon {
+    transition: transform 0.25s ease;
+}
+.stats-card:hover .stats-icon {
+    transform: scale(1.08) rotate(-2deg);
+}
+.stats-card .stats-number {
+    transition: transform 0.2s ease, letter-spacing 0.2s ease;
+}
+.stats-card:hover .stats-number {
+    transform: scale(1.04);
+    letter-spacing: 0.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .stats-card, .stats-card .stats-icon, .stats-card .stats-number {
+        transition: none;
+    }
+}
 </style>
 {% endblock %}
 
@@ -400,7 +444,7 @@
                     <i class="bi bi-list-ul" style="font-size: 2.5rem;"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">{{ orders|length }}</h5>
+                    <h5 class="stats-number mb-1" id="total-orders">{{ orders|length }}</h5>
                     <p class="stats-label mb-0">总订单数</p>
                 </div>
             </div>
@@ -413,7 +457,7 @@
                     <i class="bi bi-cash-coin" style="font-size: 2.5rem;"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">{{ orders|selectattr('deposit_paid')|list|length }}</h5>
+                    <h5 class="stats-number mb-1" id="paid-deposit">{{ orders|selectattr('deposit_paid')|list|length }}</h5>
                     <p class="stats-label mb-0">已付定金</p>
                 </div>
             </div>
@@ -426,7 +470,7 @@
                     <i class="bi bi-currency-yen"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">¥{{ "%.0f"|format(orders|sum(attribute='final_amount')) }}</h5>
+                    <h5 class="stats-number mb-1" id="total-amount">¥{{ "%.0f"|format(orders|sum(attribute='final_amount')) }}</h5>
                     <p class="stats-label mb-0">总金额</p>
                 </div>
             </div>
@@ -439,7 +483,7 @@
                     <i class="bi bi-box"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">{{ orders|selectattr('blank_purchased')|list|length }}</h5>
+                    <h5 class="stats-number mb-1" id="purchased-blank">{{ orders|selectattr('blank_purchased')|list|length }}</h5>
                     <p class="stats-label mb-0">已购毛坯</p>
                 </div>
             </div>
@@ -452,7 +496,7 @@
                     <i class="bi bi-hourglass-split"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">{{ orders|selectattr('status', 'equalto', '待制作')|list|length }}</h5>
+                    <h5 class="stats-number mb-1" id="pending-orders">{{ orders|selectattr('status', 'equalto', '待制作')|list|length }}</h5>
                     <p class="stats-label mb-0">待制作</p>
                 </div>
             </div>
@@ -465,7 +509,7 @@
                     <i class="bi bi-check-circle"></i>
                 </div>
                 <div class="stats-content">
-                    <h5 class="stats-number mb-1">{{ orders|selectattr('status', 'in', ['已完成', '已发货'])|list|length }}</h5>
+                    <h5 class="stats-number mb-1" id="completed-orders">{{ orders|selectattr('status', 'in', ['已完成', '已发货'])|list|length }}</h5>
                     <p class="stats-label mb-0">已完成</p>
                 </div>
             </div>
@@ -689,6 +733,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!showCompleted) {
         toggleCompletedOrders(false);
     }
+    
+    // 初始化统计数据
+    updateOrderStats();
 });
 
 // ==================== 背景设置功能（简化版，仅用于加载已保存的背景） ====================
@@ -891,6 +938,9 @@ function toggleCompleted() {
     const showCompleted = document.getElementById('showCompleted').checked;
     toggleCompletedOrders(showCompleted);
     
+    // 更新统计卡片
+    updateOrderStats();
+    
     // 更新URL参数
     const url = new URL(window.location);
     if (showCompleted) {
@@ -909,6 +959,36 @@ function toggleCompletedOrders(show) {
             row.style.display = show ? '' : 'none';
         }
     });
+}
+
+// 统计卡片更新：根据“显示已完成订单”开关状态，统计对应范围的订单数据
+function updateOrderStats() {
+    const showCompleted = document.getElementById('showCompleted').checked;
+    // 基于前端orders数据进行筛选，若未勾选，则排除已完成和已发货
+    const filtered = showCompleted ? orders : orders.filter(o => !(o.status === '已完成' || o.status === '已发货'));
+
+    // 计算指标
+    const total = filtered.length;
+    const paidDeposit = filtered.filter(o => !!o.deposit_paid).length;
+    const totalAmount = filtered.reduce((sum, o) => sum + (Number(o.final_amount) || 0), 0);
+    const purchasedBlank = filtered.filter(o => !!o.blank_purchased).length;
+    const pendingOrders = filtered.filter(o => o.status === '待制作').length;
+    const completedOrders = filtered.filter(o => o.status === '已完成' || o.status === '已发货').length;
+
+    // 更新DOM
+    const totalEl = document.getElementById('total-orders');
+    const paidDepositEl = document.getElementById('paid-deposit');
+    const totalAmountEl = document.getElementById('total-amount');
+    const purchasedBlankEl = document.getElementById('purchased-blank');
+    const pendingOrdersEl = document.getElementById('pending-orders');
+    const completedOrdersEl = document.getElementById('completed-orders');
+
+    if (totalEl) totalEl.textContent = String(total);
+    if (paidDepositEl) paidDepositEl.textContent = String(paidDeposit);
+    if (totalAmountEl) totalAmountEl.textContent = `¥${Math.round(totalAmount)}`;
+    if (purchasedBlankEl) purchasedBlankEl.textContent = String(purchasedBlank);
+    if (pendingOrdersEl) pendingOrdersEl.textContent = String(pendingOrders);
+    if (completedOrdersEl) completedOrdersEl.textContent = String(completedOrders);
 }
 
 // ==================== 批量操作功能 ====================
