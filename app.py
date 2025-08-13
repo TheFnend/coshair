@@ -11,12 +11,14 @@
 - RESTful API接口
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, date
 import os
 import json
+import uuid
+import tempfile
 
 # 创建Flask应用实例
 app = Flask(__name__)
@@ -680,6 +682,180 @@ def settings():
     - 用户偏好设置
     """
     return render_template('settings.html')
+
+@app.route('/api/export_data', methods=['POST'])
+def api_export_data():
+    """
+    导出订单数据API
+    
+    POST参数：
+    - format: 导出格式 (json 或 csv)
+    
+    Returns:
+        JSON响应包含下载链接
+    """
+    try:
+        data = request.get_json()
+        export_format = data.get('format', 'json').lower()
+        
+        from data_manager import export_to_json, export_to_csv
+        
+        # 生成唯一的临时文件名
+        unique_id = str(uuid.uuid4())[:8]
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        if export_format == 'json':
+            filename = f"orders_export_{timestamp}_{unique_id}.json"
+            export_to_json(filename)
+        elif export_format == 'csv':
+            filename = f"orders_export_{timestamp}_{unique_id}.csv"
+            export_to_csv(filename)
+        else:
+            return jsonify({'success': False, 'message': '不支持的导出格式'}), 400
+        
+        # 检查文件是否存在
+        if os.path.exists(filename):
+            return jsonify({
+                'success': True, 
+                'message': f'数据导出成功',
+                'filename': filename,
+                'download_url': f'/download/{filename}'
+            })
+        else:
+            return jsonify({'success': False, 'message': '导出失败，文件创建失败'}), 500
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'导出失败：{str(e)}'}), 500
+
+@app.route('/api/import_data', methods=['POST'])
+def api_import_data():
+    """
+    导入订单数据API
+    
+    文件上传：
+    - file: JSON格式的订单数据文件
+    - clear_existing: 是否清空现有数据 (可选，默认false)
+    
+    Returns:
+        JSON响应
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '未选择文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '未选择文件'}), 400
+        
+        # 检查文件扩展名
+        if not file.filename.lower().endswith('.json'):
+            return jsonify({'success': False, 'message': '只支持JSON格式文件'}), 400
+        
+        clear_existing = request.form.get('clear_existing', 'false').lower() == 'true'
+        
+        # 保存上传的文件到临时位置
+        import tempfile
+        import uuid
+        temp_filename = f"temp_import_{uuid.uuid4().hex}.json"
+        file.save(temp_filename)
+        
+        try:
+            # 读取并验证JSON文件
+            with open(temp_filename, 'r', encoding='utf-8') as f:
+                orders_data = json.load(f)
+            
+            # 验证数据格式
+            if not isinstance(orders_data, list):
+                return jsonify({'success': False, 'message': 'JSON文件格式错误：应为订单数组'}), 400
+            
+            # 清空现有数据（如果需要）
+            if clear_existing:
+                Order.query.delete()
+                db.session.commit()
+            
+            imported_count = 0
+            skipped_count = 0
+            
+            # 逐条导入订单数据
+            for order_data in orders_data:
+                try:
+                    # 验证必需字段
+                    required_fields = ['cn', 'character', 'contact', 'needed_date', 'order_date', 'final_amount']
+                    for field in required_fields:
+                        if field not in order_data:
+                            continue
+                    
+                    # 检查是否已存在相同的订单（基于cn+character+needed_date）
+                    existing_order = Order.query.filter_by(
+                        cn=order_data['cn'],
+                        character=order_data['character'],
+                        needed_date=datetime.strptime(order_data['needed_date'], '%Y-%m-%d').date()
+                    ).first()
+                    
+                    if existing_order and not clear_existing:
+                        skipped_count += 1
+                        continue
+                    
+                    # 创建新订单对象
+                    order = Order(
+                        cn=order_data['cn'],
+                        character=order_data['character'],
+                        contact=order_data['contact'],
+                        needed_date=datetime.strptime(order_data['needed_date'], '%Y-%m-%d').date(),
+                        order_date=datetime.strptime(order_data['order_date'], '%Y-%m-%d').date(),
+                        deposit_paid=order_data.get('deposit_paid', False),
+                        final_amount=float(order_data['final_amount']),
+                        shipping_included=order_data.get('shipping_included', False),
+                        blank_purchased=order_data.get('blank_purchased', False),
+                        cake_box=order_data.get('cake_box', '不需要'),
+                        status=order_data.get('status', '待制作')
+                    )
+                    
+                    # 如果备份文件包含创建时间，保持原始时间
+                    if 'created_at' in order_data:
+                        try:
+                            order.created_at = datetime.strptime(order_data['created_at'], '%Y-%m-%d %H:%M:%S')
+                        except:
+                            pass
+                    
+                    db.session.add(order)
+                    imported_count += 1
+                    
+                except Exception as e:
+                    continue
+            
+            # 提交所有更改
+            db.session.commit()
+            
+            message = f'成功导入 {imported_count} 条订单'
+            if skipped_count > 0:
+                message += f'，跳过 {skipped_count} 条重复订单'
+            
+            return jsonify({
+                'success': True,
+                'message': message,
+                'imported_count': imported_count,
+                'skipped_count': skipped_count
+            })
+            
+        finally:
+            # 清理临时文件
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'导入失败：{str(e)}'}), 500
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    """
+    下载导出的文件
+    """
+    if os.path.exists(filename):
+        return send_file(filename, as_attachment=True)
+    else:
+        flash('文件不存在', 'error')
+        return redirect(url_for('settings'))
 
 @app.route('/fontawesome-free-7.0.0-web/<path:filename>')
 def fontawesome_static(filename):

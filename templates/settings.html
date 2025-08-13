@@ -181,6 +181,80 @@
         </div>
     </div>
     
+    <!-- 数据管理 -->
+    <div class="settings-section">
+        <h5 class="settings-title">
+            <i class="fa-solid fa-database"></i>
+            数据管理
+        </h5>
+        
+        <div class="row">
+            <!-- 数据导出 -->
+            <div class="col-md-6">
+                <div class="settings-item">
+                    <label class="form-label">
+                        <i class="fa-solid fa-file-export"></i>
+                        数据导出
+                    </label>
+                    <div class="mb-3">
+                        <label for="exportFormat" class="form-label">选择导出格式</label>
+                        <select class="form-select" id="exportFormat">
+                            <option value="json">JSON 格式（完整数据）</option>
+                            <option value="csv">CSV 格式（Excel兼容）</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-success" onclick="exportData()">
+                        <i class="fa-solid fa-download"></i> 导出订单数据
+                    </button>
+                    <small class="text-muted d-block mt-2">
+                        导出所有订单数据到本地文件，用于数据备份和分析
+                    </small>
+                </div>
+            </div>
+            
+            <!-- 数据导入 -->
+            <div class="col-md-6">
+                <div class="settings-item">
+                    <label class="form-label">
+                        <i class="fa-solid fa-file-import"></i>
+                        数据导入
+                    </label>
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">选择JSON文件</label>
+                        <input type="file" class="form-control" id="importFile" accept=".json">
+                        <small class="text-muted">仅支持JSON格式的订单数据文件</small>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="clearExisting">
+                        <label class="form-check-label" for="clearExisting">
+                            清空现有数据后导入
+                        </label>
+                        <small class="text-muted d-block">
+                            <i class="fa-solid fa-triangle-exclamation text-warning"></i>
+                            警告：此操作将删除所有现有订单数据
+                        </small>
+                    </div>
+                    <button class="btn btn-primary" onclick="importData()">
+                        <i class="fa-solid fa-upload"></i> 导入订单数据
+                    </button>
+                    <small class="text-muted d-block mt-2">
+                        从备份文件恢复订单数据，支持增量导入和完整替换
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-3">
+            <i class="fa-solid fa-info-circle"></i>
+            <strong>数据管理说明：</strong>
+            <ul class="mb-0 mt-2">
+                <li><strong>导出数据：</strong>JSON格式包含完整字段信息，CSV格式适合Excel分析</li>
+                <li><strong>导入数据：</strong>只支持JSON格式，会自动检测重复订单</li>
+                <li><strong>安全提示：</strong>导入前建议先导出当前数据作为备份</li>
+            </ul>
+        </div>
+    </div>
+
     <!-- 其他设置 -->
     <div class="settings-section">
         <h5 class="settings-title">
@@ -252,6 +326,60 @@ document.addEventListener('DOMContentLoaded', function() {
     loadBackgroundSettings();
     loadSystemSettings();
 });
+
+// ==================== 数据管理 - 导出/导入 ====================
+async function exportData() {
+    try {
+        const format = document.getElementById('exportFormat').value;
+        const response = await fetch('/api/export_data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format })
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast('导出成功，正在开始下载…', 'success');
+            // 触发下载
+            const a = document.createElement('a');
+            a.href = result.download_url;
+            a.download = result.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } else {
+            showToast(result.message || '导出失败', 'error');
+        }
+    } catch (err) {
+        showToast('导出失败：' + (err.message || err), 'error');
+    }
+}
+
+async function importData() {
+    try {
+        const fileInput = document.getElementById('importFile');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showToast('请先选择要导入的JSON文件', 'warning');
+            return;
+        }
+        const clearExisting = document.getElementById('clearExisting').checked;
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        formData.append('clear_existing', clearExisting ? 'true' : 'false');
+        
+        const response = await fetch('/api/import_data', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (result.success) {
+            showToast(result.message || '导入成功', 'success');
+        } else {
+            showToast(result.message || '导入失败', 'error');
+        }
+    } catch (err) {
+        showToast('导入失败：' + (err.message || err), 'error');
+    }
+}
 
 // ==================== 背景设置功能 ====================
 
