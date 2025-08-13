@@ -873,6 +873,35 @@ def inject_today():
     """
     return dict(today=date.today())
 
+@app.context_processor
+def inject_device_info():
+    """
+    向所有模板注入设备信息
+    
+    检测用户代理字符串，判断是否为移动设备（Android）
+    """
+    user_agent = request.headers.get('User-Agent', '').lower()
+    
+    # 检测 Android 设备
+    is_android = 'android' in user_agent
+    
+    # 检测移动设备（包括 Android 和 iOS）
+    is_mobile = any(mobile_indicator in user_agent for mobile_indicator in [
+        'android', 'iphone', 'ipad', 'ipod', 'mobile', 'phone'
+    ])
+    
+    # 检测具体的移动浏览器
+    is_chrome_mobile = 'chrome' in user_agent and 'mobile' in user_agent
+    is_firefox_mobile = 'firefox' in user_agent and 'mobile' in user_agent
+    
+    return dict(
+        is_android=is_android,
+        is_mobile=is_mobile,
+        is_chrome_mobile=is_chrome_mobile,
+        is_firefox_mobile=is_firefox_mobile,
+        user_agent=user_agent
+    )
+
 # ==================== 应用启动 ====================
 
 if __name__ == '__main__':

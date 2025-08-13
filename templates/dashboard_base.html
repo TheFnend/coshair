@@ -312,11 +312,124 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--primary-color);
         }
+
+        /* === Android/Mobile 端适配 === */
+        .android-device, .mobile-device {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        /* 侧边栏在Android端适配 */
+        .android-device .sidebar, .mobile-device .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            width: 280px; /* 稍宽一些便于触控 */
+        }
+        
+        .android-device.sidebar-open .sidebar, .mobile-device.sidebar-open .sidebar {
+            transform: translateX(0);
+        }
+        
+        .android-device .main-content, .mobile-device .main-content {
+            margin-left: 0;
+        }
+        
+        /* 顶部导航栏适配 */
+        .android-device .top-navbar, .mobile-device .top-navbar {
+            padding: 15px 20px;
+        }
+        
+        .android-device .page-title, .mobile-device .page-title {
+            font-size: 1.8rem;
+        }
+        
+        /* 卡片适配 */
+        .android-device .dashboard-card, .mobile-device .dashboard-card {
+            border-radius: 18px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .android-device .stat-card, .mobile-device .stat-card {
+            padding: 20px;
+            border-radius: 18px;
+        }
+        
+        /* 统计图标适配 */
+        .android-device .stat-icon, .mobile-device .stat-icon {
+            width: 50px;
+            height: 50px;
+            font-size: 20px;
+        }
+        
+        /* 导航链接适配 */
+        .android-device .nav-link, .mobile-device .nav-link {
+            padding: 18px 25px;
+            font-size: 1rem;
+        }
+        
+        .android-device .nav-icon, .mobile-device .nav-icon {
+            width: 22px;
+            height: 22px;
+        }
+        
+        /* 用户头像和通知按钮适配 */
+        .android-device .notification-btn, .mobile-device .notification-btn {
+            width: 44px;
+            height: 44px;
+            font-size: 18px;
+        }
+        
+        /* 添加汉堡菜单按钮 */
+        .android-device .mobile-menu-toggle, .mobile-device .mobile-menu-toggle {
+            display: block;
+            width: 44px;
+            height: 44px;
+            border: none;
+            background: var(--light-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--secondary-color);
+            font-size: 18px;
+        }
+        
+        .desktop-device .mobile-menu-toggle {
+            display: none;
+        }
+        
+        /* 内容区域适配 */
+        .android-device .content-area, .mobile-device .content-area {
+            padding: 20px;
+        }
+        
+        /* 统计值字体适配 */
+        .android-device .stat-value, .mobile-device .stat-value {
+            font-size: 2.2rem;
+        }
+        
+        /* 遮罩层 */
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        
+        .android-device.sidebar-open .mobile-overlay,
+        .mobile-device.sidebar-open .mobile-overlay {
+            display: block;
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
     <!-- 侧边栏 -->
     <div class="sidebar">
         <div class="sidebar-header">
@@ -382,12 +495,16 @@
     <div class="main-content">
         <!-- 顶部导航栏 -->
         <div class="top-navbar">
-            <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button class="mobile-menu-toggle" aria-label="打开菜单">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
             <div class="user-profile">
                 <button class="notification-btn">
                     <i class="bi bi-bell"></i>
                 </button>
-                <!-- <img src="{{ url_for('static', filename='头像_耀骑士临光.png') }}" alt="用户头像" class="user-avatar"> -->
             </div>
         </div>
 
@@ -396,6 +513,7 @@
             {% block content %}{% endblock %}
         </div>
     </div>
+    <div class="mobile-overlay"></div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -411,6 +529,30 @@
             document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
             document.documentElement.style.setProperty('--bg-opacity', opacityValue);
         }
+
+        // 移动端侧边栏开关
+        const body = document.body;
+        const toggleBtn = document.querySelector('.mobile-menu-toggle');
+        const overlay = document.querySelector('.mobile-overlay');
+        const sidebar = document.querySelector('.sidebar');
+        
+        function closeSidebar() { body.classList.remove('sidebar-open'); }
+        function openSidebar() { body.classList.add('sidebar-open'); }
+        
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                body.classList.toggle('sidebar-open');
+            });
+        }
+        if (overlay) {
+            overlay.addEventListener('click', closeSidebar);
+        }
+        // 当窗口尺寸变化时，如从横屏切回竖屏，确保关闭侧边栏
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 992) {
+                closeSidebar();
+            }
+        });
     });
     </script>
     

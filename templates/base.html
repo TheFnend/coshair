@@ -700,7 +700,101 @@
         
     </style>
 </head>
-<body>
+<body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container">
+            <a class="navbar-brand text-dark" href="{{ url_for('index') }}">
+                <i class="bi bi-scissors"></i> 假毛管理系统
+            </a>
+        <div class="navbar-nav me-auto">
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleBackgroundSettings()">
+                <i class="bi bi-image"></i> 背景设置
+            </button>
+        </div>
+        <div class="navbar-nav ms-auto">
+            <a class="btn btn-outline-primary me-2" href="{{ url_for('index') }}">订单列表</a>
+            <a class="btn btn-primary" href="{{ url_for('add_order') }}">添加订单</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4 px-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+        /* === Android/Mobile 端适配 === */
+        .android-device, .mobile-device {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .android-device .navbar, .mobile-device .navbar {
+            padding: 0.5rem 1rem;
+        }
+        .android-device .card, .mobile-device .card {
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .android-device .card-body, .mobile-device .card-body {
+            padding: 1rem;
+        }
+        .android-device .btn, .mobile-device .btn {
+            padding: 0.6rem 0.9rem;
+            font-size: 1rem;
+        }
+        .android-device .table-responsive, .mobile-device .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .android-device .table td, .android-device .table th,
+        .mobile-device .table td, .mobile-device .table th {
+            padding: 0.6rem;
+            font-size: 0.95rem;
+        }
+        .android-device .page-header, .mobile-device .page-header {
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .android-device .page-title, .mobile-device .page-title { font-size: 1.6rem; }
+        .android-device .page-subtitle, .mobile-device .page-subtitle { font-size: 0.95rem; }
+        
+        /* 更易点触的选择器和控件 */
+        .android-device select.form-select, .mobile-device select.form-select,
+        .android-device input.form-control, .mobile-device input.form-control {
+            min-height: 44px;
+        }
+        
+        /* 背景图在移动端性能优化 */
+        -        .android-device body::before, .mobile-device body::before {
+        +        body.android-device::before, body.mobile-device::before {
+             background-attachment: scroll;
+         }
+        
+        /* Toast/Modal 更大触控区域 */
+        .android-device .modal .btn, .mobile-device .modal .btn { min-height: 42px; }
+        
+        /* 小屏优化 */
+        @media (max-width: 576px) {
+            .android-device .legend-item, .mobile-device .legend-item {
+                font-size: 0.85rem;
+                padding: 0.2rem 0.5rem;
+            }
+        }
+        
+        
+        
+    </style>
+</head>
+<body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container">
             <a class="navbar-brand text-dark" href="{{ url_for('index') }}">
