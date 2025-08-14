@@ -2,7 +2,8 @@
 
 {% block page_title %}收入统计{% endblock %}
 
-{% block extra_css %}
+{% block extra_css %} 
+
 <style>
     .revenue-card {
         background: rgba(255, 255, 255, 0.75);
@@ -205,6 +206,7 @@
         width: 60px;
         height: 60px;
         border-radius: 15px;
+
         display: flex;
         align-items: center;
         justify-content: center;
@@ -214,15 +216,21 @@
     }
 
     .platform-qq .platform-icon {
-        background: linear-gradient(135deg, #1890FF, #096DD9);
+        background: linear-gradient(135deg, #f8d7da, #f8d7da);
+        border: 3px solid #dc3545;
+        color: #721c24 !important;
     }
 
     .platform-wechat .platform-icon {
-        background: linear-gradient(135deg, #07C160, #059142);
+        background: linear-gradient(135deg, #d4edda, #d4edda);
+        border: 3px solid #28a745;
+        color: #155724 !important;
     }
 
     .platform-xianyu .platform-icon {
-        background: linear-gradient(135deg, #FF6600, #D4380D);
+        background: linear-gradient(135deg, #fff3cd, #fff3cd);
+        border: 3px solid #ffc107;
+        color: #856404 !important;
     }
 
     .platform-name {
@@ -289,21 +297,25 @@
     </div>
     
     <div class="platform-revenue">
-        {% for platform, data in platform_revenue.items() %}
+        {% set platform_order = ['QQ', '微信', '闲鱼'] %}
+        {% for platform in platform_order %}
+        {% if platform in platform_revenue %}
+        {% set data = platform_revenue[platform] %}
         <div class="platform-card platform-{{ 'qq' if platform == 'QQ' else 'wechat' if platform == '微信' else 'xianyu' }}">
             <div class="platform-icon">
                 {% if platform == 'QQ' %}
-                    <i class="bi bi-chat-dots"></i>
+                    <i class="fa-brands fa-qq" style="font-weight: 900 !important;"></i>
                 {% elif platform == '微信' %}
-                    <i class="bi bi-wechat"></i>
-                {% else %}
-                    <i class="bi bi-shop"></i>
+                    <i class="fa-brands fa-weixin" style="font-weight: 900 !important;"></i>
+                {% elif platform == '闲鱼' %}
+                    <i class="fa-solid fa-fish" style="font-weight: 900 !important;"></i>
                 {% endif %}
             </div>
             <div class="platform-name">{{ platform }}</div>
             <div class="platform-amount">¥{{ data.revenue }}</div>
             <div class="platform-orders">{{ data.orders }}个订单</div>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
 </div>
