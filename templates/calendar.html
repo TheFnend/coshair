@@ -14,8 +14,14 @@
 .calendar-header {
     display: flex;
     justify-content: space-between;
+    /* 居中整个头部区域 */
+    justify-content: center;
     align-items: center;
     margin-bottom: 20px;
+    /* 在父容器中水平居中 */
+    margin: 0 auto 20px;
+    width: max-content;
+    max-width: 100%;
 }
 .calendar-title-section {
     display: flex;
@@ -192,7 +198,7 @@
 {% block content %}
 <div class="calendar-container">
     <div class="calendar-header">
-        <div class="calendar-title-section" style="padding: 12px 465px;">
+        <div class="calendar-title-section">
 
             <div class="title-and-nav">
                 <button class="nav-btn-circle" onclick="previousMonth()" title="上个月">
