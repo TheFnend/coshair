@@ -114,6 +114,7 @@
         .nav-link {
             display: flex;
             align-items: center;
+            gap: 12px;
             padding: 15px 25px;
             color: var(--secondary-color);
             text-decoration: none;
@@ -146,8 +147,31 @@
         .nav-icon {
             width: 20px;
             height: 20px;
-            margin-right: 15px;
+            margin-right: 10px; /* 交由gap控制间距 */
             fill: currentColor;
+        }
+
+        /* 统一侧边栏图标和文字颜色：未选中灰色，选中/悬停蓝色 */
+        .sidebar .nav-link svg,
+        .sidebar .nav-link i.bi {
+            color: inherit;
+            fill: currentColor;
+        }
+        
+        .sidebar .nav-link.active svg,
+        .sidebar .nav-link:hover svg,
+        .sidebar .nav-link.active i.bi,
+        .sidebar .nav-link:hover i.bi {
+            color: var(--primary-color);
+            fill: currentColor;
+        }
+
+        /* 统一Bootstrap图标尺寸和对齐 */
+        .sidebar .nav-link i.bi.nav-icon {
+            font-size: 22px;
+            vertical-align: middle;
+            display: inline-block;
+            line-height: 0.5;
         }
 
         /* 主要内容区域 */
@@ -442,7 +466,7 @@
         <nav class="sidebar-nav">
             <div class="nav-item">
                 <a href="{{ url_for('dashboard_index') }}" class="nav-link {% if request.endpoint == 'dashboard_index' %}active{% endif %}">
-                    <img src="{{ url_for('static', filename='icons/home-icon.svg') }}" class="nav-icon" alt="Dashboard">
+                    <i class="bi bi-house nav-icon"></i>
                     订单列表
                 </a>
             </div>
@@ -454,7 +478,7 @@
             </div>
             <div class="nav-item">
                 <a href="{{ url_for('revenue') }}" class="nav-link {% if request.endpoint == 'revenue' %}active{% endif %}">
-                    <img src="{{ url_for('static', filename='icons/investment-icon.svg') }}" class="nav-icon" alt="收入统计">
+                    <i class="bi bi-graph-up-arrow nav-icon"></i>
                     收入统计
                 </a>
             </div>
@@ -484,7 +508,7 @@
             </div>
             <div class="nav-item">
                 <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
-                    <img src="{{ url_for('static', filename='icons/settings-icon.svg') }}" class="nav-icon" alt="设置">
+                    <i class="bi bi-gear nav-icon"></i>
                     系统设置
                 </a>
             </div>
