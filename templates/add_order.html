@@ -64,6 +64,30 @@
     background-color: #fff;
 }
 
+/* 日期输入增强样式 */
+.date-input { position: relative; }
+.date-input input[type="date"] { padding-right: 3rem; }
+/* 隐藏默认图标但保留功能（以防止双图标） */
+.date-input input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0; }
+.date-trigger {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: none;
+    background: #96c7d6;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 0 0 0 rgba(24,20,243,0);
+}
+.date-trigger:hover { box-shadow: 0 0 0 4px rgba(24,20,243,0.15); }
+.date-trigger i { font-size: 18px; line-height: 1; }
 .form-control:focus, .form-select:focus {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -340,13 +364,23 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="needed_date" class="form-label">客户排单 <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="needed_date" name="needed_date" required>
+                                <div class="date-input">
+                                    <input type="date" class="form-control" id="needed_date" name="needed_date" required>
+                                    <button class="date-trigger" type="button" aria-label="选择客户排单日期" data-target="#needed_date">
+                                        <i class="bi bi-calendar3"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="order_date" class="form-label">ddl <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="order_date" name="order_date" required>
+                                <div class="date-input">
+                                    <input type="date" class="form-control" id="order_date" name="order_date" required>
+                                    <button class="date-trigger" type="button" aria-label="选择ddl日期" data-target="#order_date">
+                                        <i class="bi bi-calendar3"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -463,6 +497,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化颜色
     updateSelectColors();
+
+    // 绑定日历按钮
+    document.querySelectorAll('.date-trigger').forEach(btn => {
+        const targetSelector = btn.getAttribute('data-target');
+        const input = document.querySelector(targetSelector);
+        if (!input) return;
+        btn.addEventListener('click', () => {
+            if (typeof input.showPicker === 'function') {
+                input.showPicker();
+            } else {
+                // 兼容不支持showPicker的浏览器
+                input.focus();
+                input.click();
+            }
+        });
+    });
 });
 
 // 表单验证

@@ -774,10 +774,9 @@
         }
         
         /* 背景图在移动端性能优化 */
-        -        .android-device body::before, .mobile-device body::before {
-        +        body.android-device::before, body.mobile-device::before {
-             background-attachment: scroll;
-         }
+        body.android-device::before, body.mobile-device::before {
+            background-attachment: scroll;
+        }
         
         /* Toast/Modal 更大触控区域 */
         .android-device .modal .btn, .mobile-device .modal .btn { min-height: 42px; }
