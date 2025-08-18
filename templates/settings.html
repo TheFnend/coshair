@@ -262,6 +262,51 @@
             系统配置
         </h5>
         
+        <!-- 宠物模型选择 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="settings-item">
+                    <label class="form-label">
+                        <i class="bi bi-heart"></i>
+                        宠物模型选择
+                    </label>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <!-- 搜索和刷新区域 -->
+                            <div class="mb-3 d-flex gap-2">
+                                <div class="flex-grow-1">
+                                    <input type="text" class="form-control" id="spineModelSearch" placeholder="搜索模型名称...">
+                                </div>
+                                <button type="button" class="btn btn-primary" id="refreshModelsBtn" title="刷新模型列表">
+                                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                                </button>
+                            </div>
+                            <select class="form-select" id="spineModelSelect">
+                                <option value="">正在加载模型列表...</option>
+                            </select>
+                            <small class="text-muted">选择您喜欢的宠物模型，更改会立即应用到所有页面</small>
+                            <!-- 刷新宠物按钮 -->
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-success btn-sm" id="refreshPetBtn" title="刷新当前页面的宠物">
+                                    <i class="bi bi-arrow-repeat"></i> 刷新宠物
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="spineModelPreview" style="height: 200px; border: 2px dashed #E6EFF5; border-radius: 15px; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
+                                <div class="text-muted">
+                                    <i class="bi bi-hourglass-split" style="font-size: 24px; display: block; margin-bottom: 8px;"></i>
+                                    正在加载预览...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <hr class="my-4">
+        
         <div class="row">
             <div class="col-md-6">
                 <div class="settings-item">
@@ -578,5 +623,131 @@ function showToast(message, type = 'info') {
         }
     }, 3000);
 }
+
+// ==================== 宠物模型选择 ====================
+async function loadSpineModels() {
+    try {
+        const select = document.getElementById('spineModelSelect');
+        const res = await fetch('/api/spine_models');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || '加载失败');
+        const currentRes = await fetch('/api/spine_model/current');
+        const current = await currentRes.json();
+        const currentId = current.success ? current.id : '113_cqbw';
+        select.innerHTML = '';
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            if (m.id === currentId) opt.selected = true;
+            opt.dataset.skel = m.skel_path;
+            opt.dataset.atlas = m.atlas_path;
+            select.appendChild(opt);
+        });
+        // 初始化预览
+        updateSpineModelPreview();
+        // 监听切换
+        if (!select._changeBound){
+            select.addEventListener('change', onSpineModelChange);
+            select._changeBound = true;
+        }
+        // 绑定搜索过滤
+        bindModelSearch();
+        // 绑定刷新按钮
+        bindRefreshButtons();
+    } catch (e) {
+        showToast('加载模型列表失败：' + e.message, 'error');
+    }
+}
+
+function bindRefreshButtons(){
+    const refreshListBtn = document.getElementById('refreshModelsBtn');
+    if (refreshListBtn && !refreshListBtn._bound){
+        refreshListBtn.addEventListener('click', async ()=>{
+            // 重新加载列表
+            await loadSpineModels();
+            showToast('模型列表已刷新', 'success');
+        });
+        refreshListBtn._bound = true;
+    }
+
+    const refreshPetBtn = document.getElementById('refreshPetBtn');
+    if (refreshPetBtn && !refreshPetBtn._bound){
+        refreshPetBtn.addEventListener('click', ()=>{
+            const select = document.getElementById('spineModelSelect');
+            const opt = select.options[select.selectedIndex];
+            if (opt && opt.dataset && opt.dataset.skel && opt.dataset.atlas){
+                if (window.refreshSpinePet){
+                    window.refreshSpinePet(opt.dataset.skel, opt.dataset.atlas);
+                    showToast('网页宠物已刷新', 'success');
+                } else {
+                    showToast('未找到刷新方法，稍后再试', 'error');
+                }
+            }
+        });
+        refreshPetBtn._bound = true;
+    }
+}
+
+function bindModelSearch(){
+    const input = document.getElementById('spineModelSearch');
+    const select = document.getElementById('spineModelSelect');
+    if (!input || !select || input._bound) return;
+    input.addEventListener('input', ()=>{
+        const keyword = input.value.trim().toLowerCase();
+        const options = Array.from(select.options);
+        options.forEach(opt=>{
+            const name = (opt.textContent || '').toLowerCase();
+            opt.hidden = keyword && !name.includes(keyword);
+        });
+        // 若所有可见项中没有当前选中项，自动选中第一个可见项
+        const visible = options.filter(o=>!o.hidden);
+        if (visible.length > 0 && visible.every(o=>!o.selected)){
+            visible[0].selected = true;
+            updateSpineModelPreview();
+        }
+    });
+    input._bound = true;
+}
+
+async function onSpineModelChange() {
+    const select = document.getElementById('spineModelSelect');
+    const id = select.value;
+    if (!id) return;
+    try {
+        const res = await fetch('/api/spine_model/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('已切换宠物模型为：' + id, 'success');
+            updateSpineModelPreview();
+        } else {
+            showToast(data.message || '切换失败', 'error');
+        }
+    } catch (e) {
+        showToast('切换失败：' + e.message, 'error');
+    }
+}
+
+function updateSpineModelPreview() {
+    const select = document.getElementById('spineModelSelect');
+    const preview = document.getElementById('spineModelPreview');
+    const opt = select.options[select.selectedIndex];
+    const previewPath = opt && opt.dataset && opt.dataset.atlas ? opt.dataset.atlas.replace('.atlas','') + '.png' : '';
+    // 使用背景预览
+    if (previewPath) {
+        preview.style.background = `url(${previewPath}) center/contain no-repeat`; 
+        preview.innerHTML = '';
+    } else {
+        preview.style.background = '#f8f9fa';
+        preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+    }
+}
+
+// 延后到页面ready后加载
+window.addEventListener('DOMContentLoaded', loadSpineModels);
 </script>
 {% endblock %}

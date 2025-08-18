@@ -452,6 +452,9 @@
     </style>
     
     {% block extra_css %}{% endblock %}
+    // Removed: <script src="{{ url_for('spine_webgl_js_38') }}"></script>
+    <script src="{{ url_for('spine_player_js_38') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}">
 </head>
 <body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
     <!-- 侧边栏 -->
@@ -539,47 +542,83 @@
     </div>
     <div class="mobile-overlay"></div>
 
+    <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
+    <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
+    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
     <script>
-    // 页面加载时恢复背景设置
-    window.addEventListener('load', function() {
-        const savedImage = localStorage.getItem('backgroundImage');
-        const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
-        
-        if (savedImage) {
-            const opacityValue = savedOpacity / 100;
-            document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
-            document.documentElement.style.setProperty('--bg-opacity', opacityValue);
+    (function(){
+        const containerId = 'spine-pet';
+        const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
+        const scale = isMobile ? 0.8 : 1;
+        const playerWidth = isMobile ? 180 : 220;
+        const playerHeight = isMobile ? 220 : 260;
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.style.width = playerWidth + 'px';
+        container.style.height = playerHeight + 'px';
+
+        function initPlayer(skelUrl, atlasUrl){
+            try {
+                const player = new spine.SpinePlayer(containerId, {
+                    skelUrl: skelUrl,
+                    atlasUrl: atlasUrl,
+                    showControls: false,
+                    backgroundColor: '#00000000',
+                    alpha: true,
+                    preserveDrawingBuffer: false,
+                    premultipliedAlpha: true,
+                    scale,
+                    success: (p) => {
+                        const prefer = ['idle', 'Idle', 'stand', 'Stand', 'breath', 'idle_1'];
+                        const all = p.animationState.data.skeletonData.animations.map(a=>a.name);
+                        let chosen = all.find(a=>prefer.includes(a)) || all[0];
+                        p.setAnimation(chosen, true);
+
+                        if (window._spinePetClickHandler) {
+                            container.removeEventListener('click', window._spinePetClickHandler);
+                        }
+                        const handler = ()=>{
+                            const idx = all.indexOf(chosen);
+                            const next = all[(idx + 1) % all.length];
+                            chosen = next;
+                            p.setAnimation(next, true);
+                        };
+                        container.addEventListener('click', handler);
+                        window._spinePetClickHandler = handler;
+                    }
+                });
+                window._spinePetPlayer = player;
+            } catch(e) {
+                console.error('Spine player init failed', e);
+            }
         }
 
-        // 移动端侧边栏开关
-        const body = document.body;
-        const toggleBtn = document.querySelector('.mobile-menu-toggle');
-        const overlay = document.querySelector('.mobile-overlay');
-        const sidebar = document.querySelector('.sidebar');
-        
-        function closeSidebar() { body.classList.remove('sidebar-open'); }
-        function openSidebar() { body.classList.add('sidebar-open'); }
-        
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                body.classList.toggle('sidebar-open');
-            });
-        }
-        if (overlay) {
-            overlay.addEventListener('click', closeSidebar);
-        }
-        // 当窗口尺寸变化时，如从横屏切回竖屏，确保关闭侧边栏
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 992) {
-                closeSidebar();
+        window.refreshSpinePet = function(newSkelUrl, newAtlasUrl){
+            if (!newSkelUrl || !newAtlasUrl) return;
+            container.innerHTML = '';
+            initPlayer(newSkelUrl, newAtlasUrl);
+        };
+        window.refreshSpinePetFromServer = async function(){
+            try {
+                const res = await fetch('/api/spine_model/current');
+                const data = await res.json();
+                if (data && data.success && data.skel_path && data.atlas_path) {
+                    window.refreshSpinePet(data.skel_path, data.atlas_path);
+                }
+            } catch (e) {
+                console.error('刷新宠物失败', e);
             }
-        });
-    });
+        };
+
+        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+        initPlayer(skelUrl, atlasUrl);
+    })();
     </script>
-    
     {% block scripts %}{% endblock %}
 </body>
 </html>

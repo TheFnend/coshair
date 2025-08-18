@@ -11,7 +11,7 @@
 - RESTful API接口
 """
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, send_file, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, date
@@ -19,6 +19,8 @@ import os
 import json
 import uuid
 import tempfile
+import urllib.request as urlrequest
+from urllib.parse import quote
 
 # 创建Flask应用实例
 app = Flask(__name__)
@@ -864,6 +866,177 @@ def fontawesome_static(filename):
     """
     return send_from_directory('fontawesome-free-7.0.0-web', filename)
 
+# === 提供ArkModels模型静态文件（Spine） ===
+@app.route('/arkmodels/<path:filename>')
+def arkmodels_static(filename):
+    """
+    提供ArkModels下的Spine模型资源(.skel/.json/.atlas/.png)
+    """
+    base_dir = os.path.join('ArkModels', 'ArkModels', 'models')
+    return send_from_directory(base_dir, filename)
+
+@app.route('/api/spine_models')
+def api_spine_models():
+    """
+    获取所有可用的Spine模型
+    
+    Returns:
+        JSON响应包含模型列表和详细信息
+    """
+    try:
+        models = []
+        models_dir = os.path.join('ArkModels', 'ArkModels', 'models')
+        
+        if os.path.exists(models_dir):
+            for folder_name in os.listdir(models_dir):
+                folder_path = os.path.join(models_dir, folder_name)
+                if os.path.isdir(folder_path):
+                    # 检查是否有必要的文件 (.skel和.atlas)
+                    skel_file = None
+                    atlas_file = None
+                    png_file = None
+                    
+                    for file in os.listdir(folder_path):
+                        if file.endswith('.skel'):
+                            skel_file = file
+                        elif file.endswith('.atlas'):
+                            atlas_file = file
+                        elif file.endswith('.png'):
+                            png_file = file
+                    
+                    if skel_file and atlas_file:  # 只有同时存在.skel和.atlas的才是有效模型
+                        models.append({
+                            'id': folder_name,
+                            'name': folder_name,
+                            'skel_file': skel_file,
+                            'atlas_file': atlas_file,
+                            'png_file': png_file,
+                            'skel_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(skel_file, safe='')}",
+                            'atlas_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(atlas_file, safe='')}",
+                            'preview_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(png_file, safe='')}" if png_file else None
+                        })
+        
+        # 按名称排序
+        models.sort(key=lambda x: x['id'])
+        
+        return jsonify({
+            'success': True,
+            'models': models,
+            'count': len(models)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'获取模型列表失败：{str(e)}'
+        }), 500
+
+@app.route('/api/spine_model/current')
+def api_spine_model_current():
+    try:
+        default_model_id = '113_cqbw'
+        model_id = session.get('spine_model_id', default_model_id)
+        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        skel_file = None
+        atlas_file = None
+        png_file = None
+        if os.path.isdir(base_dir):
+            for f in os.listdir(base_dir):
+                if f.endswith('.skel'):
+                    skel_file = f
+                elif f.endswith('.atlas'):
+                    atlas_file = f
+                elif f.endswith('.png'):
+                    png_file = f
+        if not (skel_file and atlas_file):
+            # 回落到默认模型
+            model_id = default_model_id
+            base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+            for f in os.listdir(base_dir):
+                if f.endswith('.skel'):
+                    skel_file = f
+                elif f.endswith('.atlas'):
+                    atlas_file = f
+                elif f.endswith('.png'):
+                    png_file = f
+        return jsonify({
+            'success': True,
+            'id': model_id,
+            'skel_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
+            'atlas_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
+            'preview_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/spine_model/select', methods=['POST'])
+def api_spine_model_select():
+    try:
+        data = request.get_json(force=True) or {}
+        model_id = data.get('id')
+        if not model_id:
+            return jsonify({'success': False, 'message': '缺少模型id'}), 400
+        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        if not os.path.isdir(base_dir):
+            return jsonify({'success': False, 'message': '模型目录不存在'}), 404
+        skel_file = None
+        atlas_file = None
+        png_file = None
+        for f in os.listdir(base_dir):
+            if f.endswith('.skel'):
+                skel_file = f
+            elif f.endswith('.atlas'):
+                atlas_file = f
+            elif f.endswith('.png'):
+                png_file = f
+        if not (skel_file and atlas_file):
+            return jsonify({'success': False, 'message': '模型文件不完整（缺少.skel或.atlas）'}), 400
+        session['spine_model_id'] = model_id
+        return jsonify({
+            'success': True,
+            'message': '模型已更新',
+            'id': model_id,
+            'skel_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
+            'atlas_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
+            'preview_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'更新失败：{str(e)}'}), 500
+
+@app.context_processor
+def inject_spine_model():
+    try:
+        default_model_id = '113_cqbw'
+        model_id = session.get('spine_model_id', default_model_id)
+        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        skel_file = None
+        atlas_file = None
+        if os.path.isdir(base_dir):
+            for f in os.listdir(base_dir):
+                if f.endswith('.skel'):
+                    skel_file = f
+                elif f.endswith('.atlas'):
+                    atlas_file = f
+        if not (skel_file and atlas_file):
+            model_id = default_model_id
+            base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+            for f in os.listdir(base_dir):
+                if f.endswith('.skel'):
+                    skel_file = f
+                elif f.endswith('.atlas'):
+                    atlas_file = f
+        return {
+            'SPINE_MODEL_ID': model_id,
+            'SPINE_MODEL_SKEL': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}" if skel_file else '',
+            'SPINE_MODEL_ATLAS': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}" if atlas_file else ''
+        }
+    except Exception:
+        return {
+            'SPINE_MODEL_ID': '113_cqbw',
+            'SPINE_MODEL_SKEL': '/arkmodels/113_cqbw/build_char_113_cqbw.skel',
+            'SPINE_MODEL_ATLAS': '/arkmodels/113_cqbw/build_char_113_cqbw.atlas'
+        }
+
 @app.context_processor
 def inject_today():
     """
@@ -902,13 +1075,160 @@ def inject_device_info():
         user_agent=user_agent
     )
 
+
+@app.route('/spine-player/3.8/spine-webgl.js')
+def spine_webgl_js_38():
+    # Serve a no-op shim to prevent duplicate runtime conflicts with spine-player.js (3.8 bundles runtime)
+    return app.response_class("/* spine-webgl disabled: runtime provided by spine-player.js */", mimetype='application/javascript')
+
+@app.route('/spine-player/3.8/spine-player.js')
+def spine_player_js_38():
+    return _proxy_spine_player_asset('js')
+
+@app.route('/spine-player/3.8/spine-player.css')
+def spine_player_css_38():
+    return _proxy_spine_player_asset('css')
+
+
+def _proxy_spine_webgl_js():
+    import urllib.request as _rq
+    ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TraeProxy/1.0'
+    name_candidates = ['spine-webgl.js', 'spine-webgl.min.js']
+    min_size = 30000
+
+    # Try cached files first
+    for nm in name_candidates:
+        cache_path = os.path.join('static', 'spine-player', '3.8', nm)
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    data = f.read()
+                    if data and len(data) >= min_size:
+                        return app.response_class(data, mimetype='application/javascript')
+            except Exception:
+                pass
+
+    # Build remote URL candidates
+    url_candidates = []
+    for filename in name_candidates:
+        url_candidates.extend([
+            # Working 3.8 build paths (GitHub via jsDelivr and raw.githubusercontent)
+            f'https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@3.8/spine-ts/build/{filename}',
+            f'https://raw.githubusercontent.com/EsotericSoftware/spine-runtimes/3.8/spine-ts/build/{filename}',
+        ])
+
+    # Try to fetch from remote sources
+    for u in url_candidates:
+        try:
+            req = _rq.Request(u, headers={'User-Agent': ua, 'Accept': '*/*'})
+            with _rq.urlopen(req, timeout=20) as resp:
+                data = resp.read()
+                if data and len(data) >= min_size:
+                    filename = u.rsplit('/', 1)[-1]
+                    cache_path = os.path.join('static', 'spine-player', '3.8', filename)
+                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    try:
+                        with open(cache_path, 'wb') as f:
+                            f.write(data)
+                    except Exception:
+                        pass
+                    return app.response_class(data, mimetype='application/javascript')
+        except Exception:
+            continue
+
+    # Final fallback: return any cached bytes even if below threshold
+    for nm in name_candidates:
+        cache_path = os.path.join('static', 'spine-player', '3.8', nm)
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    data = f.read()
+                    return app.response_class(data, mimetype='application/javascript')
+            except Exception:
+                pass
+
+    return app.response_class('/* spine-webgl fetch failed */', mimetype='application/javascript', status=502)
+
+
+def _proxy_spine_player_asset(kind: str):
+    import urllib.request as _rq
+    ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TraeProxy/1.0'
+    # Candidates: try non-min first, then minified
+    name_candidates = (
+        ['spine-player.js', 'spine-player.min.js'] if kind == 'js' else
+        ['spine-player.css', 'spine-player.min.css']
+    )
+    # lower CSS threshold to accept small official CSS
+    min_size = 200 if kind == 'css' else 30000
+
+    # Try any cached candidate
+    for nm in name_candidates:
+        cache_path = os.path.join('static', 'spine-player', '3.8', nm)
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    data = f.read()
+                    if data and len(data) >= min_size:
+                        return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
+            except Exception:
+                pass
+
+    # Build URL candidates across multiple sources for each filename
+    url_candidates = []
+    for filename in name_candidates:
+        if kind == 'js':
+            url_candidates.extend([
+                # Working 3.8 build paths
+                'https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@3.8/spine-ts/build/spine-player.js',
+                'https://raw.githubusercontent.com/EsotericSoftware/spine-runtimes/3.8/spine-ts/build/spine-player.js',
+            ])
+        else:
+            url_candidates.extend([
+                # CSS is under player/css in 3.8
+                'https://cdn.jsdelivr.net/gh/EsotericSoftware/spine-runtimes@3.8/spine-ts/player/css/spine-player.css',
+                'https://raw.githubusercontent.com/EsotericSoftware/spine-runtimes/3.8/spine-ts/player/css/spine-player.css',
+            ])
+
+    last_error = None
+    for u in url_candidates:
+        try:
+            req = _rq.Request(u, headers={'User-Agent': ua, 'Accept': '*/*'})
+            with _rq.urlopen(req, timeout=20) as resp:
+                data = resp.read()
+                if data and len(data) >= min_size:
+                    filename = 'spine-player.js' if kind == 'js' else 'spine-player.css'
+                    cache_path = os.path.join('static', 'spine-player', '3.8', filename)
+                    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                    try:
+                        with open(cache_path, 'wb') as f:
+                            f.write(data)
+                    except Exception:
+                        pass
+                    return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
+        except Exception as e:
+            last_error = e
+            continue
+
+    # Final fallback: return any cached bytes even if below threshold
+    for nm in name_candidates:
+        cache_path = os.path.join('static', 'spine-player', '3.8', nm)
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'rb') as f:
+                    data = f.read()
+                    return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
+            except Exception:
+                pass
+
+    return app.response_class('/* spine-player asset fetch failed */', mimetype=('application/javascript' if kind == 'js' else 'text/css'), status=502)
+
 # ==================== 应用启动 ====================
 
 if __name__ == '__main__':
     # 创建应用上下文并初始化数据库
     with app.app_context():
         db.create_all()  # 创建所有数据表
-    
+
     # 启动开发服务器
     app.run(
         debug=True,        # 开启调试模式

@@ -825,7 +825,85 @@
         {% block content %}{% endblock %}
     </div>
 
+    <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
+    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
+    <script>
+    (function(){
+        const containerId = 'spine-pet';
+        const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
+        const scale = isMobile ? 0.8 : 1;
+        const playerWidth = isMobile ? 180 : 220;
+        const playerHeight = isMobile ? 220 : 260;
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.style.width = playerWidth + 'px';
+        container.style.height = playerHeight + 'px';
+
+        function initPlayer(skelUrl, atlasUrl){
+            try {
+                const player = new spine.SpinePlayer(containerId, {
+                    skelUrl: skelUrl,
+                    atlasUrl: atlasUrl,
+                    showControls: false,
+                    backgroundColor: '#00000000',
+                    alpha: true,
+                    preserveDrawingBuffer: false,
+                    premultipliedAlpha: true,
+                    scale,
+                    success: (p) => {
+                        const prefer = ['idle', 'Idle', 'stand', 'Stand', 'breath', 'idle_1'];
+                        const all = p.animationState.data.skeletonData.animations.map(a=>a.name);
+                        let chosen = all.find(a=>prefer.includes(a)) || all[0];
+                        p.setAnimation(chosen, true);
+
+                        // 清理旧的点击处理器，避免重复绑定
+                        if (window._spinePetClickHandler) {
+                            container.removeEventListener('click', window._spinePetClickHandler);
+                        }
+                        const handler = ()=>{
+                            const idx = all.indexOf(chosen);
+                            const next = all[(idx + 1) % all.length];
+                            chosen = next;
+                            p.setAnimation(next, true);
+                        };
+                        container.addEventListener('click', handler);
+                        window._spinePetClickHandler = handler;
+                    }
+                });
+                window._spinePetPlayer = player;
+            } catch(e) {
+                console.error('Spine player init failed', e);
+            }
+        }
+
+        // 暴露到全局：根据给定URL刷新宠物
+        window.refreshSpinePet = function(newSkelUrl, newAtlasUrl){
+            if (!newSkelUrl || !newAtlasUrl) return;
+            // 先清空容器DOM，然后重新初始化
+            container.innerHTML = '';
+            initPlayer(newSkelUrl, newAtlasUrl);
+        };
+        // 暴露到全局：从后端当前选择获取并刷新
+        window.refreshSpinePetFromServer = async function(){
+            try {
+                const res = await fetch('/api/spine_model/current');
+                const data = await res.json();
+                if (data && data.success && data.skel_path && data.atlas_path) {
+                    window.refreshSpinePet(data.skel_path, data.atlas_path);
+                }
+            } catch (e) {
+                console.error('刷新宠物失败', e);
+            }
+        };
+
+        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+        initPlayer(skelUrl, atlasUrl);
+    })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
