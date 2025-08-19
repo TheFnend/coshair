@@ -284,8 +284,27 @@
                                 <option value="">正在加载模型列表...</option>
                             </select>
                             <small class="text-muted">选择您喜欢的宠物模型，更改会立即应用到所有页面</small>
+                            <!-- 宠物模式切换 -->
+                            <div class="mt-3">
+                                <label class="form-label">宠物显示模式</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="petMode" id="petModeFixed" value="fixed" checked>
+                                    <label class="form-check-label" for="petModeFixed">
+                                        <i class="bi bi-pin-angle"></i> 固定模式
+                                    </label>
+                                    <small class="text-muted d-block">宠物固定在页面右下角</small>
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="petMode" id="petModeMoving" value="moving">
+                                    <label class="form-check-label" for="petModeMoving">
+                                        <i class="bi bi-arrow-left-right"></i> 移动模式
+                                    </label>
+                                    <small class="text-muted d-block">宠物在页面底部左右移动，支持鼠标交互</small>
+                                </div>
+                            </div>
+                            
                             <!-- 刷新宠物按钮 -->
-                            <div class="mt-2">
+                            <div class="mt-3">
                                 <button type="button" class="btn btn-outline-success btn-sm" id="refreshPetBtn" title="刷新当前页面的宠物">
                                     <i class="bi bi-arrow-repeat"></i> 刷新宠物
                                 </button>
@@ -747,6 +766,54 @@ function updateSpineModelPreview() {
 }
 
 // 延后到页面ready后加载
-window.addEventListener('DOMContentLoaded', loadSpineModels);
+window.addEventListener('DOMContentLoaded', function() {
+    loadSpineModels();
+    initPetModeSettings();
+});
+
+// ==================== 宠物模式设置 ====================
+function initPetModeSettings() {
+    // 加载保存的宠物模式设置
+    const savedMode = localStorage.getItem('petMode') || 'fixed';
+    const fixedRadio = document.getElementById('petModeFixed');
+    const movingRadio = document.getElementById('petModeMoving');
+    
+    if (savedMode === 'moving') {
+        movingRadio.checked = true;
+        // 如果当前页面支持移动宠物，则启用
+        if (typeof window.toggleMovingPet === 'function') {
+            window.toggleMovingPet(true);
+        }
+    } else {
+        fixedRadio.checked = true;
+    }
+    
+    // 绑定切换事件
+    fixedRadio.addEventListener('change', function() {
+        if (this.checked) {
+            localStorage.setItem('petMode', 'fixed');
+            if (typeof window.toggleMovingPet === 'function') {
+                window.toggleMovingPet(false);
+            }
+            showToast('已切换到固定宠物模式', 'success');
+        }
+    });
+    
+    movingRadio.addEventListener('change', function() {
+        if (this.checked) {
+            localStorage.setItem('petMode', 'moving');
+            if (typeof window.toggleMovingPet === 'function') {
+                window.toggleMovingPet(true);
+            } else {
+                showToast('当前页面不支持移动宠物模式', 'warning');
+                // 回退到固定模式
+                fixedRadio.checked = true;
+                localStorage.setItem('petMode', 'fixed');
+            }
+            showToast('已切换到移动宠物模式', 'success');
+        }
+    });
+}
+
 </script>
 {% endblock %}

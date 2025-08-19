@@ -452,8 +452,7 @@
     </style>
     
     {% block extra_css %}{% endblock %}
-    <script src="{{ url_for('spine_player_js_38') }}"></script>
-    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}">
+
 </head>
 <body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
     <!-- 侧边栏 -->
@@ -541,7 +540,14 @@
     </div>
     <div class="mobile-overlay"></div>
 
+    <!-- 固定位置的宠物容器 -->
     <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+    
+    <!-- 底部移动宠物容器 -->
+    <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; bottom:0px; left:0px; width:100vw; height:300px; z-index: 1000; pointer-events:none; display:none;">
+        <canvas id="spine-moving-canvas" style="width:100%; height:100%; pointer-events:auto;"></canvas>
+        <div id="spine-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px; display:none;">正在加载模型...</div>
+    </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -648,6 +654,335 @@
         const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
         initPlayer(skelUrl, atlasUrl);
     })();
+    
+    // ==================== 移动宠物功能 ====================
+    (function() {
+        // 移动宠物使用Spine Player，直接初始化
+        initMovingPet();
+        
+        let movingApp = null;
+        let currentMovingSpine = null;
+        let isMoving = false;
+        let moveDirection = 1;
+        let moveSpeed = 1;
+        let isPaused = false;
+        let isMouseInteracting = false;
+        let originalAnimation = '';
+        
+        function initMovingPet() {
+            // 移动宠物现在使用Spine Player，不需要PIXI检查
+            console.log('移动宠物初始化完成，使用Spine Player');
+        }
+        
+        function loadMovingSpineModel(skelUrl, atlasUrl) {
+            if (!skelUrl || !atlasUrl) return;
+            
+            const loadingDiv = document.getElementById('spine-loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.textContent = '正在加载移动模型...';
+            }
+            
+            // 清理当前模型
+            if (currentMovingSpine) {
+                stopMoving();
+                if (movingApp && movingApp.stage) {
+                    movingApp.stage.removeChild(currentMovingSpine);
+                }
+                if (currentMovingSpine.destroy) {
+                    currentMovingSpine.destroy();
+                }
+                currentMovingSpine = null;
+            }
+            
+            // 使用Spine Player替代PIXI Spine来避免特殊字符问题
+            const canvas = document.getElementById('spine-moving-canvas');
+            if (!canvas) return;
+            
+            try {
+                // 检查spine对象是否存在
+                if (typeof spine === 'undefined' || typeof spine.SpinePlayer === 'undefined') {
+                    throw new Error('Spine Player未加载，请确保页面已正确加载Spine库');
+                }
+                
+                // 创建一个临时容器div来承载Spine Player
+                const tempContainer = document.createElement('div');
+                tempContainer.style.width = '100%';
+                tempContainer.style.height = '100%';
+                tempContainer.style.position = 'absolute';
+                tempContainer.style.top = '0';
+                tempContainer.style.left = '0';
+                tempContainer.id = 'temp-spine-player-' + Date.now();
+                
+                // 清空canvas容器并添加临时容器
+                const container = document.getElementById('spine-moving-pet');
+                container.innerHTML = '';
+                container.appendChild(tempContainer);
+                
+                // 重新添加loading div
+                const newLoadingDiv = document.createElement('div');
+                newLoadingDiv.id = 'spine-loading';
+                newLoadingDiv.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px;';
+                newLoadingDiv.textContent = '正在加载移动模型...';
+                container.appendChild(newLoadingDiv);
+                
+                // 使用Spine Player
+                const player = new spine.SpinePlayer(tempContainer.id, {
+                    skelUrl: skelUrl,
+                    atlasUrl: atlasUrl,
+                    showControls: false,
+                    backgroundColor: '#00000000',
+                    alpha: true,
+                    preserveDrawingBuffer: false,
+                    premultipliedAlpha: true,
+                    scale: 1,
+                    success: (p) => {
+                        if (newLoadingDiv) newLoadingDiv.style.display = 'none';
+                        
+                        // 寻找合适的移动动画
+                        const prefer = ['move', 'walk', 'run', 'idle', 'Idle', 'stand', 'Stand'];
+                        const all = p.animationState.data.skeletonData.animations.map(a => a.name);
+                        let chosen = all.find(a => prefer.some(pref => a.toLowerCase().includes(pref.toLowerCase()))) || all[0];
+                        
+                        if (chosen) {
+                            p.setAnimation(chosen, true);
+                            originalAnimation = chosen;
+                        }
+                        
+                        // 设置移动相关变量
+                        currentMovingSpine = {
+                            player: p,
+                            container: tempContainer,
+                            x: window.innerWidth / 2,
+                            animations: all,
+                            currentAnimation: chosen
+                        };
+                        
+                        // 设置初始位置
+                        tempContainer.style.left = (window.innerWidth / 2 - 110) + 'px';
+                        tempContainer.style.width = '220px';
+                        tempContainer.style.height = '260px';
+                        tempContainer.style.bottom = '0px';
+                        tempContainer.style.top = 'auto';
+                        
+                        // 添加点击事件
+                        tempContainer.addEventListener('click', handleMouseClick);
+                        
+                        isMoving = true;
+                        startMoving();
+                        
+                        console.log('移动Spine模型加载成功！');
+                    },
+                    error: (error) => {
+                        console.error('Spine Player加载失败:', error);
+                        if (newLoadingDiv) {
+                            newLoadingDiv.style.display = 'block';
+                            newLoadingDiv.textContent = '错误: ' + (error.message || '加载失败');
+                        }
+                    }
+                });
+                
+            } catch (e) {
+                console.error('创建移动Spine对象时出错:', e);
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'block';
+                    loadingDiv.textContent = '错误: ' + (e.message || '未知错误');
+                }
+            }
+        }
+        
+        let moveInterval = null;
+        
+        function startMoving() {
+            if (!currentMovingSpine || !isMoving) return;
+            
+            if (moveInterval) {
+                clearInterval(moveInterval);
+            }
+            
+            moveInterval = setInterval(moveModel, 16); // ~60fps
+        }
+        
+        function stopMoving() {
+            isMoving = false;
+            isPaused = false;
+            if (moveInterval) {
+                clearInterval(moveInterval);
+                moveInterval = null;
+            }
+        }
+        
+        function moveModel() {
+            if (!currentMovingSpine || !isMoving || isMouseInteracting || isPaused) return;
+            
+            // 检查边界并反转方向（在移动之前检查）
+            if (currentMovingSpine.x <= 110 && moveDirection < 0) {
+                moveDirection = 1;
+                if (currentMovingSpine.container) {
+                    currentMovingSpine.container.style.transform = 'scaleX(1)';
+                }
+            } else if (currentMovingSpine.x >= window.innerWidth - 110 && moveDirection > 0) {
+                moveDirection = -1;
+                if (currentMovingSpine.container) {
+                    currentMovingSpine.container.style.transform = 'scaleX(-1)';
+                }
+            }
+            
+            // 移动模型容器
+            currentMovingSpine.x += moveDirection * moveSpeed;
+            
+            // 更新容器位置
+            if (currentMovingSpine.container) {
+                currentMovingSpine.container.style.left = (currentMovingSpine.x - 110) + 'px';
+            }
+            
+            // 随机暂停
+            if (Math.random() < 0.003) {
+                startRandomPause();
+            }
+        }
+        
+        function startRandomPause() {
+            if (!currentMovingSpine || isPaused || isMouseInteracting) return;
+            
+            const pauseAnimations = ['interact', 'relax', 'sleep', 'idle', 'stand'];
+            const availableAnimations = currentMovingSpine.animations.filter(anim => 
+                pauseAnimations.some(pauseAnim => anim.toLowerCase().includes(pauseAnim.toLowerCase()))
+            );
+            
+            if (availableAnimations.length > 0) {
+                const randomAnim = availableAnimations[Math.floor(Math.random() * availableAnimations.length)];
+                if (currentMovingSpine.player) {
+                    currentMovingSpine.player.setAnimation(randomAnim, false);
+                    isPaused = true;
+                    
+                    // 设置定时器恢复原动画
+                    setTimeout(() => {
+                        if (isPaused && currentMovingSpine.player && originalAnimation) {
+                            currentMovingSpine.player.setAnimation(originalAnimation, true);
+                            isPaused = false;
+                        }
+                    }, 3000); // 3秒后恢复
+                }
+            }
+        }
+        
+        function handleMouseClick() {
+            if (!currentMovingSpine || isMouseInteracting) return;
+            
+            const interactAnimations = currentMovingSpine.animations.filter(anim => 
+                anim.toLowerCase().includes('interact')
+            );
+            
+            if (interactAnimations.length > 0) {
+                const interactAnim = interactAnimations[0];
+                if (currentMovingSpine.player) {
+                    currentMovingSpine.player.setAnimation(interactAnim, false);
+                    isMouseInteracting = true;
+                    isPaused = false;
+                    
+                    // 设置定时器恢复原动画
+                    setTimeout(() => {
+                        if (isMouseInteracting && currentMovingSpine.player && originalAnimation) {
+                            currentMovingSpine.player.setAnimation(originalAnimation, true);
+                            isMouseInteracting = false;
+                        }
+                    }, 2000); // 2秒后恢复
+                }
+            } else {
+                // 如果没有interact动画，就切换到下一个动画
+                if (currentMovingSpine.animations.length > 1) {
+                    const currentIndex = currentMovingSpine.animations.indexOf(currentMovingSpine.currentAnimation);
+                    const nextIndex = (currentIndex + 1) % currentMovingSpine.animations.length;
+                    const nextAnim = currentMovingSpine.animations[nextIndex];
+                    
+                    if (currentMovingSpine.player) {
+                        currentMovingSpine.player.setAnimation(nextAnim, true);
+                        currentMovingSpine.currentAnimation = nextAnim;
+                    }
+                }
+            }
+        }
+        
+        // 暴露全局函数
+        window.toggleMovingPet = function(enable) {
+            const container = document.getElementById('spine-moving-pet');
+            const fixedPet = document.getElementById('spine-pet');
+            
+            if (enable) {
+                container.style.display = 'block';
+                fixedPet.style.display = 'none';
+                
+                // 初始化移动宠物
+                if (!movingApp) {
+                    initMovingPet();
+                }
+                
+                // 动态获取当前选择的模型
+                fetch('/api/spine_model/current')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.skel_path && data.atlas_path) {
+                            setTimeout(() => loadMovingSpineModel(data.skel_path, data.atlas_path), 100);
+                        } else {
+                            // 回退到模板变量
+                            const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                            const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                            if (skelUrl && atlasUrl) {
+                                setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取当前模型失败:', error);
+                        // 回退到模板变量
+                        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                        if (skelUrl && atlasUrl) {
+                            setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                        }
+                    });
+            } else {
+                container.style.display = 'none';
+                fixedPet.style.display = 'block';
+                stopMoving();
+            }
+        };
+        
+        window.refreshMovingPet = function(newSkelUrl, newAtlasUrl) {
+             if (document.getElementById('spine-moving-pet').style.display !== 'none') {
+                 loadMovingSpineModel(newSkelUrl, newAtlasUrl);
+             }
+         };
+         
+         // 页面加载时检查宠物模式设置
+         document.addEventListener('DOMContentLoaded', function() {
+             const savedMode = localStorage.getItem('petMode');
+             if (savedMode === 'moving') {
+                 // 延迟一点时间确保所有脚本都加载完成
+                 setTimeout(() => {
+                     if (typeof window.toggleMovingPet === 'function') {
+                         // 动态获取当前模型并启用移动宠物
+                         fetch('/api/spine_model/current')
+                             .then(response => response.json())
+                             .then(data => {
+                                 if (data.success && data.skel_path && data.atlas_path) {
+                                     window.toggleMovingPet(true);
+                                 } else {
+                                     // 回退到模板变量
+                                     window.toggleMovingPet(true);
+                                 }
+                             })
+                             .catch(error => {
+                                 console.error('获取当前模型失败:', error);
+                                 // 回退到模板变量
+                                 window.toggleMovingPet(true);
+                             });
+                     }
+                 }, 500);
+             }
+         });
+     })();
     </script>
     
     <!-- 全局背景设置加载 -->
