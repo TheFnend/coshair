@@ -33,6 +33,8 @@
     <!-- 网站图标 -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='头像_耀骑士临光.png') }}">
     <style>
+        /* 全局重置，移除默认的页面外边距，避免顶部空白 */
+        html, body { margin: 0; padding: 0; }
         /* ==================== 表格样式 ==================== */
         
         /* 表格行背景色 - 斑马线形式 */
@@ -831,7 +833,38 @@
     <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
     <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
     <script>
+    // 全局函数：处理包含#的URL，进行编码以防止被截断
+    window.safeUrl = function(url) {
+        if (typeof url === 'string' && url.includes('#')) {
+            return url.replace(/#/g, '%23');
+        }
+        return url;
+    };
+
     (function(){
+        // Patch: 自动对 /arkmodels/ 下的图片 URL 中的 # 进行编码，防止被当作片段截断
+        try {
+            if (!window.__spineImgSrcPatched) {
+                const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+                if (desc && desc.set && desc.get) {
+                    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                        configurable: true,
+                        enumerable: true,
+                        get: function(){ return desc.get.call(this); },
+                        set: function(val){
+                            try {
+                                if (typeof val === 'string' && val.includes('#') && (val.indexOf('/arkmodels/') !== -1)) {
+                                    val = val.replace(/#/g, '%23');
+                                }
+                            } catch (e) {}
+                            return desc.set.call(this, val);
+                        }
+                    });
+                    window.__spineImgSrcPatched = true;
+                }
+            }
+        } catch (e) { /* 忽略补丁失败 */ }
+
         const containerId = 'spine-pet';
         const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
         const scale = isMobile ? 0.8 : 1;

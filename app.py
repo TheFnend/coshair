@@ -1161,6 +1161,11 @@ def _proxy_spine_player_asset(kind: str):
     # lower CSS threshold to accept small official CSS
     min_size = 200 if kind == 'css' else 30000
 
+    def looks_like_js(data: bytes) -> bool:
+        # avoid caching demo HTML pages; basic heuristic
+        head = data[:512].lstrip()
+        return not (head.startswith(b'<!DOCTYPE') or head.startswith(b'<html') or b'<script' in head[:200])
+
     # Try any cached candidate
     for nm in name_candidates:
         cache_path = os.path.join('static', 'spine-player', '3.8', nm)
@@ -1168,7 +1173,7 @@ def _proxy_spine_player_asset(kind: str):
             try:
                 with open(cache_path, 'rb') as f:
                     data = f.read()
-                    if data and len(data) >= min_size:
+                    if data and len(data) >= min_size and (kind == 'css' or looks_like_js(data)):
                         return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
             except Exception:
                 pass
@@ -1195,7 +1200,7 @@ def _proxy_spine_player_asset(kind: str):
             req = _rq.Request(u, headers={'User-Agent': ua, 'Accept': '*/*'})
             with _rq.urlopen(req, timeout=20) as resp:
                 data = resp.read()
-                if data and len(data) >= min_size:
+                if data and len(data) >= min_size and (kind == 'css' or looks_like_js(data)):
                     filename = 'spine-player.js' if kind == 'js' else 'spine-player.css'
                     cache_path = os.path.join('static', 'spine-player', '3.8', filename)
                     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
@@ -1209,14 +1214,15 @@ def _proxy_spine_player_asset(kind: str):
             last_error = e
             continue
 
-    # Final fallback: return any cached bytes even if below threshold
+    # Final fallback: return any cached bytes even if below threshold (but keep js/html sanity)
     for nm in name_candidates:
         cache_path = os.path.join('static', 'spine-player', '3.8', nm)
         if os.path.exists(cache_path):
             try:
                 with open(cache_path, 'rb') as f:
                     data = f.read()
-                    return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
+                    if data and (kind == 'css' or looks_like_js(data)):
+                        return app.response_class(data, mimetype=('application/javascript' if kind == 'js' else 'text/css'))
             except Exception:
                 pass
 

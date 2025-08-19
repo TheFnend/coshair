@@ -127,7 +127,6 @@
 {% endblock %}
 
 {% block content %}
-<div class="content-area">
     <!-- 背景设置 -->
     <div class="settings-section">
         <h5 class="settings-title">
@@ -678,7 +677,7 @@ function bindRefreshButtons(){
             const opt = select.options[select.selectedIndex];
             if (opt && opt.dataset && opt.dataset.skel && opt.dataset.atlas){
                 if (window.refreshSpinePet){
-                    window.refreshSpinePet(opt.dataset.skel, opt.dataset.atlas);
+                    window.refreshSpinePet(safeUrl(opt.dataset.skel), safeUrl(opt.dataset.atlas));
                     showToast('网页宠物已刷新', 'success');
                 } else {
                     showToast('未找到刷新方法，稍后再试', 'error');
@@ -736,10 +735,10 @@ function updateSpineModelPreview() {
     const select = document.getElementById('spineModelSelect');
     const preview = document.getElementById('spineModelPreview');
     const opt = select.options[select.selectedIndex];
-    const previewPath = opt && opt.dataset && opt.dataset.atlas ? opt.dataset.atlas.replace('.atlas','') + '.png' : '';
-    // 使用背景预览
+    const previewPathRaw = opt && opt.dataset && opt.dataset.atlas ? opt.dataset.atlas.replace('.atlas','') + '.png' : '';
+    const previewPath = safeUrl(previewPathRaw);
     if (previewPath) {
-        preview.style.background = `url(${previewPath}) center/contain no-repeat`; 
+        preview.style.background = `url(${previewPath}) center/contain no-repeat`;
         preview.innerHTML = '';
     } else {
         preview.style.background = '#f8f9fa';

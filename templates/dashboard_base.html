@@ -452,7 +452,6 @@
     </style>
     
     {% block extra_css %}{% endblock %}
-    // Removed: <script src="{{ url_for('spine_webgl_js_38') }}"></script>
     <script src="{{ url_for('spine_player_js_38') }}"></script>
     <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}">
 </head>
@@ -550,7 +549,38 @@
     <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
     <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
     <script>
+    // 全局函数：处理包含#的URL，进行编码以防止被截断
+    window.safeUrl = function(url) {
+        if (typeof url === 'string' && url.includes('#')) {
+            return url.replace(/#/g, '%23');
+        }
+        return url;
+    };
+
     (function(){
+        // Patch 图片src写入，自动编码#
+        try {
+            if (!window.__spineImgSrcPatched) {
+                const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+                if (desc && desc.set && desc.get) {
+                    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                        configurable: true,
+                        enumerable: true,
+                        get: function(){ return desc.get.call(this); },
+                        set: function(val){
+                            try {
+                                if (typeof val === 'string' && val.includes('#') && (val.indexOf('/arkmodels/') !== -1)) {
+                                    val = val.replace(/#/g, '%23');
+                                }
+                            } catch (e) {}
+                            return desc.set.call(this, val);
+                        }
+                    });
+                    window.__spineImgSrcPatched = true;
+                }
+            }
+        } catch (e) {}
+
         const containerId = 'spine-pet';
         const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
         const scale = isMobile ? 0.8 : 1;

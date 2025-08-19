@@ -2211,13 +2211,11 @@ var spine;
 					success(new Uint8Array(request.response));
 				}
 				else {
-					var respText = (request.responseType === "arraybuffer" || typeof request.responseText !== "string") ? "" : request.responseText;
-					error(request.status, respText);
+					error(request.status, request.responseText);
 				}
 			};
 			request.onerror = function () {
-				var respText = (request.responseType === "arraybuffer" || typeof request.responseText !== "string") ? "" : request.responseText;
-				error(request.status, respText);
+				error(request.status, request.responseText);
 			};
 			request.send();
 		};
@@ -2237,9 +2235,9 @@ var spine;
 				_this.toLoad--;
 				_this.loaded++;
 			}, function (state, responseText) {
-				_this.errors[path] = "Couldn't load binary " + path + ": status " + state + ", " + (typeof responseText === 'string' ? responseText : '') ;
+				_this.errors[path] = "Couldn't load binary " + path + ": status " + status + ", " + responseText;
 				if (error)
-					error(path, "Couldn't load binary " + path + ": status " + state + ", " + (typeof responseText === 'string' ? responseText : ''));
+					error(path, "Couldn't load binary " + path + ": status " + status + ", " + responseText);
 				_this.toLoad--;
 				_this.loaded++;
 			});
@@ -2257,9 +2255,9 @@ var spine;
 				_this.toLoad--;
 				_this.loaded++;
 			}, function (state, responseText) {
-				_this.errors[path] = "Couldn't load text " + path + ": status " + state + ", " + (typeof responseText === 'string' ? responseText : '');
+				_this.errors[path] = "Couldn't load text " + path + ": status " + status + ", " + responseText;
 				if (error)
-					error(path, "Couldn't load text " + path + ": status " + state + ", " + (typeof responseText === 'string' ? responseText : ''));
+					error(path, "Couldn't load text " + path + ": status " + status + ", " + responseText);
 				_this.toLoad--;
 				_this.loaded++;
 			});
