@@ -649,6 +649,24 @@
         initPlayer(skelUrl, atlasUrl);
     })();
     </script>
+    
+    <!-- 全局背景设置加载 -->
+    <script>
+    // 加载背景设置
+    function loadBackgroundSettings() {
+        const savedImage = localStorage.getItem('backgroundImage');
+        const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
+        
+        if (savedImage) {
+            document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
+            document.documentElement.style.setProperty('--bg-opacity', savedOpacity / 100);
+        }
+    }
+    
+    // 页面加载时自动应用背景设置
+    document.addEventListener('DOMContentLoaded', loadBackgroundSettings);
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>
