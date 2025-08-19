@@ -695,8 +695,14 @@ function bindRefreshButtons(){
             const select = document.getElementById('spineModelSelect');
             const opt = select.options[select.selectedIndex];
             if (opt && opt.dataset && opt.dataset.skel && opt.dataset.atlas){
-                if (window.refreshSpinePet){
-                    window.refreshSpinePet(safeUrl(opt.dataset.skel), safeUrl(opt.dataset.atlas));
+                const skel = safeUrl(opt.dataset.skel);
+                const atlas = safeUrl(opt.dataset.atlas);
+                const mode = localStorage.getItem('petMode') || 'fixed';
+                if (mode === 'moving' && typeof window.refreshMovingPet === 'function'){
+                    window.refreshMovingPet(skel, atlas);
+                    showToast('移动宠物已刷新', 'success');
+                } else if (typeof window.refreshSpinePet === 'function'){
+                    window.refreshSpinePet(skel, atlas);
                     showToast('网页宠物已刷新', 'success');
                 } else {
                     showToast('未找到刷新方法，稍后再试', 'error');
@@ -780,10 +786,8 @@ function initPetModeSettings() {
     
     if (savedMode === 'moving') {
         movingRadio.checked = true;
-        // 如果当前页面支持移动宠物，则启用
-        if (typeof window.toggleMovingPet === 'function') {
-            window.toggleMovingPet(true);
-        }
+        // 不在这里启用移动宠物，让dashboard_base.html的DOMContentLoaded统一处理
+        // 避免重复调用导致状态冲突
     } else {
         fixedRadio.checked = true;
     }
@@ -802,15 +806,18 @@ function initPetModeSettings() {
     movingRadio.addEventListener('change', function() {
         if (this.checked) {
             localStorage.setItem('petMode', 'moving');
-            if (typeof window.toggleMovingPet === 'function') {
-                window.toggleMovingPet(true);
-            } else {
-                showToast('当前页面不支持移动宠物模式', 'warning');
-                // 回退到固定模式
-                fixedRadio.checked = true;
-                localStorage.setItem('petMode', 'fixed');
-            }
-            showToast('已切换到移动宠物模式', 'success');
+            // 延迟调用，确保DOM和脚本都准备好了
+            setTimeout(() => {
+                if (typeof window.toggleMovingPet === 'function') {
+                    window.toggleMovingPet(true);
+                    showToast('已切换到移动宠物模式', 'success');
+                } else {
+                    showToast('当前页面不支持移动宠物模式', 'warning');
+                    // 回退到固定模式
+                    fixedRadio.checked = true;
+                    localStorage.setItem('petMode', 'fixed');
+                }
+            }, 100);
         }
     });
 }

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "ba6256a2038e4c9ea699415b28a2596f"}'></script><!-- End Cloudflare Web Analytics -->
+  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+      new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  })(window,document,'script','dataLayer','GTM-5N9JVDH');</script>
+  <!-- End Google Tag Manager -->
+  <!-- Begin Jekyll SEO tag v2.7.1 -->
+  <title>naganeko works</title>
+  <meta name="generator" content="Jekyll v3.9.0"/>
+  <meta property="og:title" content="naganeko works"/>
+  <meta property="og:locale" content="en_US"/>
+  <link rel="canonical" href="https://naganeko.pages.dev/"/>
+  <meta property="og:url" content="https://naganeko.pages.dev/"/>
+  <meta property="og:site_name" content="naganeko.pages.dev"/>
+  <meta name="twitter:card" content="summary"/>
+  <meta property="twitter:title" content="naganeko works"/>
+  <script type="application/ld+json">
+    {
+      "url": "https://naganeko.pages.dev/",
+      "@type": "WebSite",
+      "headline": "naganeko works",
+      "name": "naganeko.pages.dev",
+      "@context": "https://schema.org"
+    }</script>
+  <!-- End Jekyll SEO tag -->
+
+  <link rel="stylesheet" href="/assets/css/style.css?v=9b0c41744cbba447170c014ed1f4e5be2ee2817b">
+  <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
+
+  <!-- Setup Google Analytics -->
+
+
+  <!-- You can set your favicon here -->
+  <!-- link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" -->
+
+  <!-- end custom head snippets -->
+
+</head>
+<body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5N9JVDH"
+                  height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+<div class="container-lg px-3 my-5 markdown-body">
+
+  <!--      <h1><a href="https://naganeko.pages.dev/">naganeko.pages.dev</a></h1>-->
+  <h1 id="naganeko-works">naganeko works</h1>
+
+  <h1 id="apps">Apps
+  </h1>
+  <h3>
+    <a href="https://github.com/naganeko/naganeko-tools"> https://github.com/naganeko/naganeko-tools </a>
+  </h3>
+
+  <h2 id="spine-gif"><a href="https://naganeko.pages.dev/spine-gif">spine-gif</a></h2>
+
+  <ul>
+    <li>importing Spine2 chibi data and generating animated-gif and apng</li>
+  </ul>
+
+  <h2 id="chibi-combine"><a href="https://naganeko.pages.dev/chibi-combine/">chibi-combine</a></h2>
+
+  <ul>
+    <li>combining Spine2 chibi data and export json and atlas files</li>
+  </ul>
+
+  <h2 id="chibi-gif"><a href="https://naganeko.pages.dev/chibi-gif">chibi-gif</a></h2>
+
+  <ul>
+    <li>importing Spine3 chibi data and generating animated-gif and apng</li>
+  </ul>
+
+  <h2 id="chibi-deco"><a href="https://naganeko.pages.dev/chibi-deco">chibi-deco</a></h2>
+
+  <ul>
+    <li>importing Spine2 chibi data and decorate them as you wish</li>
+    <li><a href="https://youtu.be/Sc_bZ5j4NYI">Tutorial@YouTube</a></li>
+  </ul>
+
+  <h2 id="chibi-deco-3"><a href="https://naganeko.pages.dev/chibi-deco-3">chibi-deco-3</a></h2>
+
+  <ul>
+    <li>importing Spine3 chibi data and decorate them as you wish</li>
+  </ul>
+
+  <h2 id="mirr-gif"><a href="https://naganeko.pages.dev/mirr-gif">mirr-gif</a></h2>
+
+  <ul>
+    <li>importing DragonBones 5.5 chibi data and generating animated-gif and apng</li>
+  </ul>
+
+  <h2 id="sz-soldier"><a href="https://naganeko.pages.dev/sz_soldier/">sz soldier</a></h2>
+
+  <ul>
+    <li>a clone of Psycho Soldier</li>
+    <li><strong>warning: no ending</strong></li>
+    <li>key
+      <ul>
+        <li>d : drop from Drone</li>
+        <li>ctrl : gun</li>
+        <li>alt : ball</li>
+        <li>arrows : move</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h2 id="chibi-chess"><a href="https://naganeko.pages.dev/gfl-chess/">chibi-chess</a></h2>
+
+  <ul>
+    <li>chess</li>
+    <li><a href="https://github.com/op12no2/lozza">Lozza Chess Engine</a></li>
+  </ul>
+
+  <h2 id="fun"><a href="https://naganeko.pages.dev/fun/">fun</a></h2>
+
+  <ul>
+    <li>RO-delero of paROdeus</li>
+  </ul>
+
+  <h1 id="docs">Docs</h1>
+  <h2 id="이-겨울이-지나"><a href="https://naganeko.pages.dev/winter-of-dolls/">이 겨울이 지나</a></h2>
+
+  <ul>
+    <li>원본주소 https://gall.dcinside.com/m/bjsn/1976944</li>
+  </ul>
+
+  <h2 id="シルカの塔-the-tower-of-silka"><a href="https://naganeko.pages.dev/tower-of-silka/">シルカの塔 the Tower of Silka</a>
+  </h2>
+
+  <ul>
+    <li>Dungeon Guide</li>
+  </ul>
+
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/anchor-js/4.1.0/anchor.min.js"
+        integrity="sha256-lZaRhKri35AyJSypXXs4o6OPFTbTmUoltBbDCbdzegg=" crossorigin="anonymous"></script>
+<script>anchors.add();</script>
+<!-- Cloudflare Pages Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "ba6256a2038e4c9ea699415b28a2596f"}'></script><!-- Cloudflare Pages Analytics --></body>
+</html>

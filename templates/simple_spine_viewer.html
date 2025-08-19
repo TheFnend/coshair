@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simple Spine Model Viewer</title>
+  
+  <!-- PIXI.js and Spine dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.2.2/dist/browser/pixi.js"
+          integrity="sha256-AiXDYWt7rqC7JuOBLIvL2GuRGjjE1mvYepH56aycTPc=" crossorigin="anonymous"></script>
+  <script src="naganeko.pages.dev/chibi-gif/js2/pixi-spine-3.8.umd_all-3.8@3.0.16.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+      font-family: 'Arial', sans-serif;
+      overflow-x: hidden;
+    }
+    
+    #main-content {
+      padding: 50px 20px;
+      text-align: center;
+      min-height: 70vh;
+    }
+    
+    h1 {
+      color: #333;
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    p {
+      color: #666;
+      font-size: 1.2em;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    
+    #spine-container {
+      position: fixed;
+      bottom: 0px;
+      left: 0px;
+      width: 100vw;
+      height: 300px;
+      overflow: hidden;
+      z-index: 1000;
+    }
+    
+    #spine-container canvas {
+      border-radius: 12px;
+    }
+    
+    .loading-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #4a90e2;
+      font-size: 14px;
+      text-align: center;
+    }
+    
+    .error-message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid #ff6b6b;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 12px;
+      text-align: center;
+      color: #d63031;
+      max-width: 250px;
+    }
+  </style>
+</head>
+<body>
+  <div id="main-content">
+    <h1>Simple Spine Model Viewer</h1>
+    <p>欢迎来到简单的Spine模型查看器！这是一个干净简洁的页面，右下角会显示来自model文件夹的Spine动画模型。</p>
+  </div>
+  
+  <div id="controls" style="margin-bottom: 10px; position: fixed; bottom: 310px; left: 20px; width: 300px; text-align: center;">
+    <div style="margin-bottom: 8px;">
+      <select id="model-select" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+          <option value="">选择模型...</option>
+          <option value="003_kalts">003_kalts</option>
+          <option value="003_kalts_boc#6">003_kalts_boc#6</option>
+          <option value="1000_gopro">1000_gopro</option>
+          <option value="148_nearl">148_nearl</option>
+          <option value="dyn_illust_003_kalts_boc#6">dyn_illust_003_kalts_boc#6</option>
+        </select>
+    </div>
+    <div style="margin-bottom: 8px;">
+      <select id="animation-select" style="margin-right: 10px; padding: 5px; border: 1px solid #ccc; border-radius: 4px;">
+        <option value="">选择动作...</option>
+      </select>
+      <button id="play-pause-btn" style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer;">播放/暂停</button>
+    </div>
+    <div id="model-info" style="font-size: 12px; color: #666; text-align: left; padding: 5px; background: #f9f9f9; border-radius: 4px; display: none;">
+      <div>模型: <span id="current-model">未选择</span></div>
+      <div>状态: <span id="model-status">等待选择</span></div>
+    </div>
+  </div>
+  
+  <div id="spine-container">
+    <div class="loading-text">正在加载模型...</div>
+  </div>
+  
+  <script>
+    // 创建PIXI应用
+    const app = new PIXI.Application({
+      width: window.innerWidth,
+      height: 300,
+      backgroundColor: 0x000000,
+      backgroundAlpha: 0,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true
+    });
+    
+    // 全局变量
+    const container = document.getElementById('spine-container');
+    const loadingText = container.querySelector('.loading-text');
+    let currentSpine = null;
+    let isPlaying = true;
+    let moveDirection = 1; // 1为向右，-1为向左
+    let moveSpeed = 1; // 移动速度
+    let isMoving = false;
+    let pauseTimer = 0; // 暂停计时器
+    let pauseDuration = 0; // 暂停持续时间
+    let isPaused = false; // 是否正在暂停
+    let originalAnimation = ''; // 原始移动动画名称
+    let isMouseInteracting = false; // 是否正在鼠标交互
+    let mouseInteractAnimation = ''; // 鼠标交互时的动画
+    
+    // 模型配置映射
+    const modelConfigs = {
+      '003_kalts': {
+        name: '003_kalts',
+        skelFile: 'model/003_kalts/build_char_003_kalts.skel',
+        displayName: 'Kalts'
+      },
+      '003_kalts_boc#6': {
+        name: '003_kalts_boc#6',
+        skelFile: 'model/003_kalts_boc#6/build_char_003_kalts_boc#6.skel',
+        displayName: 'Kalts BOC#6',
+        allowUpscale: true
+      },
+      '1000_gopro': {
+        name: '1000_gopro',
+        skelFile: 'model/1000_gopro/enemy_1000_gopro.skel',
+        displayName: 'Gopro'
+      },
+      'dyn_illust_003_kalts_boc#6': {
+        name: 'dyn_illust_003_kalts_boc#6',
+        skelFile: 'model/dyn_illust_003_kalts_boc#6/dyn_illust_char_003_kalts_boc#6.skel',
+        displayName: 'Kalts BOC#6 (Dynamic)'
+      },
+      '148_nearl': {
+        name: '148_nearl',
+        skelFile: 'model/148_nearl/build_char_148_nearl.skel',
+        displayName: 'Nearl'
+      }
+    };
+    
+    // 编码URL路径中的每个段，避免如#等特殊字符导致加载失败
+    function encodePathSegments(path) {
+      if (!path) return path;
+      return path.split('/').map(encodeURIComponent).join('/');
+    }
+    
+    // 更新模型信息显示
+    function updateModelInfo(modelName, status) {
+      const modelInfo = document.getElementById('model-info');
+      const currentModelSpan = document.getElementById('current-model');
+      const modelStatusSpan = document.getElementById('model-status');
+      
+      if (modelName) {
+        const config = modelConfigs[modelName];
+        currentModelSpan.textContent = config ? config.displayName : modelName;
+        modelInfo.style.display = 'block';
+      } else {
+        currentModelSpan.textContent = '未选择';
+        modelInfo.style.display = 'none';
+      }
+      
+      modelStatusSpan.textContent = status;
+    }
+    
+    // 清理当前模型
+    function clearCurrentModel() {
+      if (currentSpine) {
+        stopMoving();
+        // 移除鼠标点击事件监听器
+        currentSpine.off('click', handleMouseClick);
+        app.stage.removeChild(currentSpine);
+        currentSpine.destroy();
+        currentSpine = null;
+      }
+      
+      // 重置交互状态
+      isMouseInteracting = false;
+      
+      // 清空动画选择器
+      const animationSelect = document.getElementById('animation-select');
+      animationSelect.innerHTML = '<option value="">选择动作...</option>';
+    }
+    
+    // 移动控制函数
+    function startMoving() {
+      if (!currentSpine || !isMoving) return;
+      
+      app.ticker.add(moveModel);
+    }
+    
+    function stopMoving() {
+      isMoving = false;
+      isPaused = false;
+      app.ticker.remove(moveModel);
+    }
+    
+    function startRandomPause() {
+      if (!currentSpine || isPaused || isMouseInteracting) return;
+      
+      // 不需要保存当前动画，始终恢复到move动画
+      
+      // 随机选择暂停动画
+      const pauseAnimations = ['interact', 'relax', 'sleep', 'idle', 'stand'];
+      const availableAnimations = currentSpine.state.data.skeletonData.animations.filter(anim => 
+        pauseAnimations.some(pauseAnim => anim.name.toLowerCase().includes(pauseAnim.toLowerCase()))
+      );
+      
+      if (availableAnimations.length > 0) {
+        const randomAnim = availableAnimations[Math.floor(Math.random() * availableAnimations.length)];
+        currentSpine.state.setAnimation(0, randomAnim.name, false); // 播放一次，不循环
+        
+        isPaused = true;
+        console.log(`随机暂停，播放动画: ${randomAnim.name}`);
+        
+        // 设置动画完成后的回调
+        currentSpine.state.addListener({
+          complete: function(entry) {
+            if (entry.animation.name === randomAnim.name && isPaused) {
+              // 随机动画播放完成，恢复移动动画
+              isPaused = false;
+              pauseTimer = 0;
+              if (originalAnimation && currentSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                currentSpine.state.setAnimation(0, originalAnimation, true);
+                console.log(`随机动画完成，恢复移动动画: ${originalAnimation}`);
+              }
+              // 移除监听器
+              currentSpine.state.clearListeners();
+            }
+          }
+        });
+      }
+    }
+    
+    // 鼠标点击交互函数
+    function handleMouseClick() {
+      if (!currentSpine || isMouseInteracting) return;
+      
+      // 不需要保存当前动画，始终恢复到move动画
+      
+      // 寻找interact动画
+      const interactAnimations = currentSpine.state.data.skeletonData.animations.filter(anim => 
+        anim.name.toLowerCase().includes('interact')
+      );
+      
+      if (interactAnimations.length > 0) {
+        const interactAnim = interactAnimations[0];
+        currentSpine.state.setAnimation(0, interactAnim.name, false); // 播放一次，不循环
+        mouseInteractAnimation = interactAnim.name;
+        console.log(`鼠标点击，播放动画: ${interactAnim.name}`);
+        
+        isMouseInteracting = true;
+        // 停止随机暂停
+        isPaused = false;
+        pauseTimer = 0;
+        
+        // 设置动画完成后的回调
+        currentSpine.state.addListener({
+          complete: function(entry) {
+            if (entry.animation.name === interactAnim.name && isMouseInteracting) {
+              // interact动画播放完成，恢复移动动画
+              isMouseInteracting = false;
+              if (originalAnimation && currentSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                currentSpine.state.setAnimation(0, originalAnimation, true);
+                console.log(`interact动画完成，恢复移动动画: ${originalAnimation}`);
+              }
+              // 移除监听器
+              currentSpine.state.clearListeners();
+            }
+          }
+        });
+      }
+    }
+    
+    function moveModel() {
+      if (!currentSpine || !isMoving) return;
+      
+      // 如果正在鼠标交互中，停止移动
+      if (isMouseInteracting) {
+        return;
+      }
+      
+      // 如果正在暂停中（播放随机动画）
+      if (isPaused) {
+        return;
+      }
+      
+      // 移动模型
+      currentSpine.x += moveDirection * moveSpeed;
+      
+      // 检查边界并反转方向（使用整个网页宽度）
+      if (currentSpine.x <= 0) {
+        moveDirection = 1;
+        if (currentSpine.skeleton) {
+          currentSpine.skeleton.scaleX = Math.abs(currentSpine.skeleton.scaleX);
+        }
+      } else if (currentSpine.x >= window.innerWidth) {
+        moveDirection = -1;
+        if (currentSpine.skeleton) {
+          currentSpine.skeleton.scaleX = -Math.abs(currentSpine.skeleton.scaleX);
+        }
+      }
+      
+      // 随机暂停（每300帧大约有1%的概率暂停）
+      if (Math.random() < 0.003) {
+        startRandomPause();
+      }
+    }
+    
+    // 加载Spine模型
+    async function loadSpineModel(modelName) {
+      if (!modelName || !modelConfigs[modelName]) {
+        console.error('无效的模型名称:', modelName);
+        return;
+      }
+      
+      try {
+        updateModelInfo(modelName, '正在加载...');
+        
+        // 清理之前的模型
+        clearCurrentModel();
+        
+        // 显示加载文本
+        if (loadingText) {
+          loadingText.style.display = 'block';
+          loadingText.textContent = '正在加载模型...';
+        }
+        
+        // 确保canvas已添加到容器
+        if (!container.contains(app.view)) {
+          container.appendChild(app.view);
+        }
+        
+        const config = modelConfigs[modelName];
+        
+        // 创建新的加载器实例
+        const loader = new PIXI.Loader();
+        
+        // 对skel路径进行分段编码，避免如#等特殊字符的问题
+        const encodedSkelUrl = encodePathSegments(config.skelFile);
+        
+        // 自定义imageLoader，确保atlas中的png文件名也会被正确编码
+        const customImageLoaderFactory = function(ldr, namePrefix, baseUrl, imageOptions) {
+          if (baseUrl && baseUrl.lastIndexOf('/') !== (baseUrl.length - 1)) {
+            baseUrl += '/';
+          }
+          return function(line, callback) {
+            const name = namePrefix + line;
+            const encodedLine = line.split('/').map(encodeURIComponent).join('/');
+            const url = baseUrl + encodedLine;
+            const cachedResource = ldr.resources[name];
+            if (cachedResource) {
+              const done = () => {
+                callback(cachedResource.texture.baseTexture);
+              };
+              if (cachedResource.texture) {
+                done();
+              } else {
+                cachedResource.onAfterMiddleware.add(done);
+              }
+            } else {
+              ldr.add(name, url, imageOptions, (resource) => {
+                if (!resource.error) {
+                  if (line.indexOf('-pma.') >= 0 && PIXI.ALPHA_MODES && resource.texture && resource.texture.baseTexture) {
+                    resource.texture.baseTexture.alphaMode = PIXI.ALPHA_MODES.PMA;
+                  }
+                  callback(resource.texture.baseTexture);
+                } else {
+                  callback(null);
+                }
+              });
+            }
+          }
+        };
+        
+        // 添加Spine资源到加载器，并传入自定义imageLoader
+        loader.add(modelName, encodedSkelUrl, {
+          metadata: {
+            imageLoader: customImageLoaderFactory
+          }
+        });
+        
+        loader.load((loader, resources) => {
+          try {
+            if (!resources[modelName] || !resources[modelName].spineData) {
+              throw new Error('Spine数据加载失败');
+            }
+            
+            // 隐藏加载文本
+            if (loadingText) {
+              loadingText.style.display = 'none';
+            }
+            
+            // 创建Spine对象
+            currentSpine = new PIXI.spine.Spine(resources[modelName].spineData);
+            
+            // 先设置初始位置
+            currentSpine.x = app.screen.width / 2;
+            currentSpine.y = app.screen.height / 2;
+            
+            // 计算合适的缩放比例
+            const bounds = currentSpine.getBounds();
+            const scaleX = (app.screen.width * 0.8) / bounds.width;
+            const scaleY = (app.screen.height * 0.8) / bounds.height;
+            const baseScale = Math.min(scaleX, scaleY);
+            // 只对数字开头且带#的模型进行放大
+            const isNumberStartWithHash = config && config.name && /^\d.*#/.test(config.name);
+            const allowUpscale = (config && config.allowUpscale) || isNumberStartWithHash;
+            // 对符合条件的模型额外放大4倍
+             const scale = allowUpscale ? Math.min(baseScale * 4, 5) : Math.min(baseScale, 1);
+             
+             currentSpine.scale.set(scale);
+             
+             // 缩放后重新调整位置：水平居中，底部精确贴合网页底端
+             currentSpine.x = app.screen.width / 2;
+             currentSpine.y = app.screen.height;
+            
+            // 添加到舞台
+            app.stage.addChild(currentSpine);
+            
+            // 设置模型为可交互
+            currentSpine.interactive = true;
+            currentSpine.buttonMode = true;
+            
+            // 添加鼠标点击事件监听器
+            currentSpine.on('click', handleMouseClick);
+            
+            // 填充动画选择下拉菜单
+            const animationSelect = document.getElementById('animation-select');
+            animationSelect.innerHTML = '<option value="">选择动作...</option>';
+            
+            if (currentSpine.state.data.skeletonData.animations.length > 0) {
+              currentSpine.state.data.skeletonData.animations.forEach(animation => {
+                const option = document.createElement('option');
+                option.value = animation.name;
+                option.textContent = animation.name;
+                animationSelect.appendChild(option);
+              });
+              
+              // 优先播放move动画，如果没有则播放第一个动画
+            let defaultAnimation = currentSpine.state.data.skeletonData.animations.find(anim => 
+              anim.name.toLowerCase().includes('move') || anim.name.toLowerCase().includes('walk')
+            );
+            if (!defaultAnimation) {
+              defaultAnimation = currentSpine.state.data.skeletonData.animations[0];
+            }
+            
+            currentSpine.state.setAnimation(0, defaultAnimation.name, true);
+            animationSelect.value = defaultAnimation.name;
+            // 保存move动画作为默认移动动画
+            originalAnimation = defaultAnimation.name;
+            isPlaying = true;
+              
+              // 启动移动
+              isMoving = true;
+              startMoving();
+            }
+            
+            updateModelInfo(modelName, '加载成功');
+            console.log('Spine模型加载成功！');
+            console.log('可用动画:', currentSpine.state.data.skeletonData.animations.map(anim => anim.name));
+          } catch (e) {
+            console.error('创建Spine对象时出错:', e);
+            updateModelInfo(modelName, '加载失败');
+            if (loadingText) {
+              loadingText.style.display = 'block';
+              loadingText.textContent = '错误: ' + (e && e.message ? e.message : '未知错误');
+            }
+          }
+        });
+      } catch (error) {
+        console.error('加载Spine模型时出错:', error);
+        updateModelInfo(modelName, '加载失败');
+        if (loadingText) {
+          loadingText.style.display = 'block';
+          loadingText.textContent = '错误: ' + (error && error.message ? error.message : '未知错误');
+        }
+      }
+    }
+    
+    function initializeEventListeners() {
+      const modelSelect = document.getElementById('model-select');
+      modelSelect.addEventListener('change', function() {
+        if (this.value) {
+          loadSpineModel(this.value);
+        } else {
+          clearCurrentModel();
+          updateModelInfo(null, '等待选择');
+        }
+      });
+      
+      // 动画选择事件监听器
+      const animationSelect = document.getElementById('animation-select');
+      animationSelect.addEventListener('change', function() {
+        if (this.value && currentSpine) {
+          currentSpine.state.setAnimation(0, this.value, true);
+          isPlaying = true;
+          console.log('切换到动画:', this.value);
+        }
+      });
+      
+      // 播放/暂停按钮事件监听器
+      const playPauseBtn = document.getElementById('play-pause-btn');
+      playPauseBtn.addEventListener('click', function() {
+        if (currentSpine && currentSpine.state.tracks[0]) {
+          if (isPlaying) {
+            currentSpine.state.tracks[0].timeScale = 0; // 暂停动画
+            stopMoving(); // 停止移动
+            console.log('动画和移动已暂停');
+          } else {
+            currentSpine.state.tracks[0].timeScale = 1; // 播放动画
+            isMoving = true;
+            startMoving(); // 开始移动
+            console.log('动画和移动已播放');
+          }
+          isPlaying = !isPlaying;
+        }
+      });
+    }
+    
+    // 页面加载完成后初始化
+    window.addEventListener('load', () => {
+      // 添加canvas到容器
+      container.appendChild(app.view);
+      
+      // 初始化事件监听器
+      initializeEventListeners();
+      
+      // 初始化模型信息
+      updateModelInfo(null, '等待选择');
+      
+      console.log('Spine模型查看器初始化完成');
+    });
+    
+    // 错误处理
+    window.addEventListener('error', (event) => {
+      console.error('页面错误:', event.error);
+    });
+  </script>
+</body>
+</html>
