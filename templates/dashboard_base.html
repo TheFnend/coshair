@@ -822,9 +822,14 @@
                         const scaleX = (movingApp.screen.width * 0.8) / bounds.width;
                         const scaleY = (movingApp.screen.height * 0.8) / bounds.height;
                         const baseScale = Math.min(scaleX, scaleY);
-                        const scale = Math.min(baseScale, 1);
+                        
+                        // 检查模型名称是否包含#字符，带#的模型通常较小需要放大
+                        const modelName = skelUrl.split('/').pop() || '';
+                        const hasHashInName = modelName.includes('#');
+                        const scale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3,0.5);
                         
                         currentMovingSpine.scale.set(scale);
+                        console.log(`模型缩放: ${modelName}, 包含#: ${hasHashInName}, 缩放比例: ${scale.toFixed(2)}`);
                         
                         // 缩放后重新调整位置：水平居中，底部精确贴合
                         currentMovingSpine.x = movingApp.screen.width / 2;
@@ -1187,6 +1192,8 @@
         
         window.refreshMovingPet = function(newSkelUrl, newAtlasUrl) {
              if (document.getElementById('spine-moving-pet').style.display !== 'none') {
+                 // 重置初始化标志，确保刷新后也会执行初始interact动作
+                 hasInitialInteract = false;
                  loadMovingSpineModel(newSkelUrl, newAtlasUrl);
              }
          };
