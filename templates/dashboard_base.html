@@ -892,6 +892,184 @@
             }
         }
         
+        // 新的状态管理变量
+        let currentAction = 'init'; // 当前动作状态
+        let actionStartTime = 0;
+        let isInMoveAction = false;
+        let hasInitialInteract = false;
+        
+        // 动作权重配置
+        const ACTION_WEIGHTS = {
+            'relax': 160,    // relax/idle
+            'sleep': 32,
+            'move_left': 32, // 向左移动
+            'move_right': 32, // 向右移动
+            'special': 16    // 如果模型有special动作
+        };
+        
+        // 加权随机选择动作
+        function selectWeightedAction() {
+            if (!currentMovingSpine) return 'relax';
+            
+            const animations = currentMovingSpine.state.data.skeletonData.animations;
+            const weights = [];
+            const actions = [];
+            
+            // 检查relax/idle动作
+            const hasRelaxIdle = animations.some(anim => {
+                const name = anim.name.toLowerCase();
+                return name.includes('relax') || name.includes('idle');
+            });
+            if (hasRelaxIdle) {
+                weights.push(ACTION_WEIGHTS.relax);
+                actions.push('relax');
+            }
+            
+            // 检查sleep动作
+            const hasSleep = animations.some(anim => 
+                anim.name.toLowerCase().includes('sleep')
+            );
+            if (hasSleep) {
+                weights.push(ACTION_WEIGHTS.sleep);
+                actions.push('sleep');
+            }
+            
+            // 检查move动作（分为左右两个方向）
+            const hasMove = animations.some(anim => {
+                const name = anim.name.toLowerCase();
+                return name.includes('move') || name.includes('walk') || name.includes('run');
+            });
+            if (hasMove) {
+                weights.push(ACTION_WEIGHTS.move_left);
+                actions.push('move_left');
+                weights.push(ACTION_WEIGHTS.move_right);
+                actions.push('move_right');
+            }
+            
+            // 检查special动作
+            const hasSpecial = animations.some(anim => 
+                anim.name.toLowerCase().includes('special')
+            );
+            if (hasSpecial) {
+                weights.push(ACTION_WEIGHTS.special);
+                actions.push('special');
+            }
+            
+            // 加权随机选择
+            const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+            let random = Math.random() * totalWeight;
+            
+            for (let i = 0; i < weights.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    return actions[i];
+                }
+            }
+            
+            return actions[0] || 'relax';
+        }
+        
+        // 执行指定动作
+        function performAction(action) {
+            if (!currentMovingSpine) return;
+            
+            currentAction = action;
+            actionStartTime = Date.now();
+            
+            const animations = currentMovingSpine.state.data.skeletonData.animations;
+            let targetAnimation = null;
+            
+            switch (action) {
+                case 'relax':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('relax') || name.includes('idle');
+                    });
+                    isInMoveAction = false;
+                    break;
+                case 'sleep':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('sleep')
+                    );
+                    isInMoveAction = false;
+                    break;
+                case 'move_left':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('move') || name.includes('walk') || name.includes('run');
+                    });
+                    isInMoveAction = true;
+                    // 设置向左移动
+                    moveDirection = -1;
+                    if (currentMovingSpine.skeleton) {
+                        currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+                    }
+                    break;
+                case 'move_right':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('move') || name.includes('walk') || name.includes('run');
+                    });
+                    isInMoveAction = true;
+                    // 设置向右移动
+                    moveDirection = 1;
+                    if (currentMovingSpine.skeleton) {
+                        currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+                    }
+                    break;
+                case 'special':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('special')
+                    );
+                    isInMoveAction = false;
+                    break;
+                case 'interact':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('interact')
+                    );
+                    isInMoveAction = false;
+                    break;
+            }
+            
+            // 如果找不到特定动画，使用默认动画
+            if (!targetAnimation) {
+                targetAnimation = animations.find(anim => 
+                    anim.name.toLowerCase().includes('idle')
+                ) || animations[0];
+            }
+            
+            if (targetAnimation) {
+                const isLoop = action === 'move_left' || action === 'move_right' || action === 'relax';
+                currentMovingSpine.state.setAnimation(0, targetAnimation.name, isLoop);
+                console.log(`执行动作: ${action}, 动画: ${targetAnimation.name}, 循环: ${isLoop}`);
+                
+                // 为非循环动画设置完成监听器
+                if (!isLoop) {
+                    currentMovingSpine.state.addListener({
+                        complete: function(entry) {
+                            if (entry.animation.name === targetAnimation.name) {
+                                console.log(`动作 ${action} 完成，选择下一个动作`);
+                                // 移除监听器
+                                currentMovingSpine.state.clearListeners();
+                                // 选择下一个动作
+                                const nextAction = selectWeightedAction();
+                                performAction(nextAction);
+                            }
+                        }
+                    });
+                } else {
+                    // 循环动画设置随机持续时间后切换
+                    const duration = 3000 + Math.random() * 5000; // 3-8秒
+                    setTimeout(() => {
+                        if (currentAction === action && !isMouseInteracting) {
+                            const nextAction = selectWeightedAction();
+                            performAction(nextAction);
+                        }
+                    }, duration);
+                }
+            }
+        }
+        
         function moveModel() {
             if (!currentMovingSpine || !isMoving) return;
             
@@ -900,66 +1078,34 @@
                 return;
             }
             
-            // 如果正在暂停中（播放随机动画）
-            if (isPaused) {
+            // 初始化时执行interact动作
+            if (!hasInitialInteract) {
+                hasInitialInteract = true;
+                performAction('interact');
                 return;
             }
             
-            // 移动模型
-            currentMovingSpine.x += moveDirection * moveSpeed;
-            
-            // 检查边界并反转方向（使用整个网页宽度）
-            if (currentMovingSpine.x <= 0) {
-                moveDirection = 1;
-                if (currentMovingSpine.skeleton) {
-                    currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+            // 只有在move动作时才移动
+            if (isInMoveAction && (currentAction === 'move_left' || currentAction === 'move_right')) {
+                // 移动模型
+                currentMovingSpine.x += moveDirection * moveSpeed;
+                
+                // 检查边界并反转方向
+                if (currentMovingSpine.x <= 0) {
+                    moveDirection = 1;
+                    if (currentMovingSpine.skeleton) {
+                        currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+                    }
+                } else if (currentMovingSpine.x >= window.innerWidth) {
+                    moveDirection = -1;
+                    if (currentMovingSpine.skeleton) {
+                        currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+                    }
                 }
-            } else if (currentMovingSpine.x >= window.innerWidth) {
-                moveDirection = -1;
-                if (currentMovingSpine.skeleton) {
-                    currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
-                }
-            }
-            
-            // 随机暂停（每300帧大约有1%的概率暂停）
-            if (Math.random() < 0.003) {
-                startRandomPause();
             }
         }
         
-        function startRandomPause() {
-            if (!currentMovingSpine || isPaused || isMouseInteracting) return;
-            
-            // 随机选择暂停动画
-            const pauseAnimations = ['interact', 'relax', 'sleep', 'idle', 'stand'];
-            const availableAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
-                pauseAnimations.some(pauseAnim => anim.name.toLowerCase().includes(pauseAnim.toLowerCase()))
-            );
-            
-            if (availableAnimations.length > 0) {
-                const randomAnim = availableAnimations[Math.floor(Math.random() * availableAnimations.length)];
-                currentMovingSpine.state.setAnimation(0, randomAnim.name, false); // 播放一次，不循环
-                
-                isPaused = true;
-                console.log(`随机暂停，播放动画: ${randomAnim.name}`);
-                
-                // 设置动画完成后的回调
-                currentMovingSpine.state.addListener({
-                    complete: function(entry) {
-                        if (entry.animation.name === randomAnim.name && isPaused) {
-                            // 随机动画播放完成，恢复移动动画
-                            isPaused = false;
-                            if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
-                                currentMovingSpine.state.setAnimation(0, originalAnimation, true);
-                                console.log(`随机动画完成，恢复移动动画: ${originalAnimation}`);
-                            }
-                            // 移除监听器
-                            currentMovingSpine.state.clearListeners();
-                        }
-                    }
-                });
-            }
-        }
+        // 旧的startRandomPause函数已被新的权重系统替代
         
         function handleMouseClick() {
             if (!currentMovingSpine || isMouseInteracting) return;
@@ -975,21 +1121,19 @@
                 console.log(`鼠标点击，播放动画: ${interactAnim.name}`);
                 
                 isMouseInteracting = true;
-                // 停止随机暂停
-                isPaused = false;
                 
                 // 设置动画完成后的回调
                 currentMovingSpine.state.addListener({
                     complete: function(entry) {
                         if (entry.animation.name === interactAnim.name && isMouseInteracting) {
-                            // interact动画播放完成，恢复移动动画
+                            // interact动画播放完成，选择下一个加权随机动作
                             isMouseInteracting = false;
-                            if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
-                                currentMovingSpine.state.setAnimation(0, originalAnimation, true);
-                                console.log(`interact动画完成，恢复移动动画: ${originalAnimation}`);
-                            }
+                            console.log(`interact动画完成，选择下一个动作`);
                             // 移除监听器
                             currentMovingSpine.state.clearListeners();
+                            // 选择下一个动作
+                            const nextAction = selectWeightedAction();
+                            performAction(nextAction);
                         }
                     }
                 });
