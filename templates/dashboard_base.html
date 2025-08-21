@@ -549,7 +549,7 @@
     <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
     
     <!-- 底部移动宠物容器 -->
-    <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; bottom:0px; left:0px; width:100vw; height:300px; z-index: 1000; pointer-events:auto; display:none; overflow: visible;">
+    <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; bottom:0px; left:0px; width:100vw; height:300px; z-index: 1000; pointer-events:none; display:none; overflow: visible;">
         <div id="spine-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px; display:none;">正在加载模型...</div>
     </div>
 
@@ -761,6 +761,10 @@
             if (!container.contains(movingApp.view)) {
                 container.innerHTML = '';
                 container.appendChild(movingApp.view);
+                // 让canvas不拦截鼠标事件，底部按钮可点击
+                if (movingApp.view && movingApp.view.style) {
+                    movingApp.view.style.pointerEvents = 'none';
+                }
                 
                 // 重新添加loading div
                 const newLoadingDiv = document.createElement('div');
@@ -1196,7 +1200,47 @@
                 return null;
             }
         }
-
+        
+        // 计算宠物屏幕矩形，用于命中测试（精准映射到屏幕坐标）
+        function getPetScreenRect(pet) {
+            if (!pet || !pet.spine || !movingApp || !movingApp.view) return null;
+            try {
+                const b = pet.spine.getBounds();
+                const rect = movingApp.view.getBoundingClientRect();
+                const left = rect.left + b.x;
+                const top = rect.top + b.y;
+                const width = b.width;
+                const height = b.height;
+                return { left, top, right: left + width, bottom: top + height, width, height };
+            } catch (e) { return null; }
+        }
+        function pointInRect(x, y, r) {
+            return r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+        }
+        
+        // 全局点击穿透代理：仅当命中宠物时拦截并触发交互
+        (function setupGlobalPetClickProxy(){
+            const container = document.getElementById('spine-moving-pet');
+            if (container) {
+                container.style.pointerEvents = 'none';
+            }
+            document.addEventListener('pointerdown', function(e){
+                const cont = document.getElementById('spine-moving-pet');
+                if (!cont || cont.style.display === 'none') return;
+                const x = e.clientX, y = e.clientY;
+                for (let i = movingPets.length - 1; i >= 0; i--) { // 后添加的在上层，优先判断
+                    const pet = movingPets[i];
+                    const r = getPetScreenRect(pet);
+                    if (pointInRect(x, y, r)) {
+                        try { handleMouseClick(pet); } catch(err) {}
+                        e.stopPropagation();
+                        e.preventDefault();
+                        return;
+                    }
+                }
+            }, true);
+        })();
+        
         function separateOverlappingPets() {
             const pad = 4; // 需要保留的最小间距
             const maxPush = 6; // 限制每帧最大分离位移，避免突然跃迁
