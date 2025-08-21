@@ -326,7 +326,8 @@
                                         <i class="bi bi-trash"></i> 清空全部
                                     </button>
                                 </div>
-                                <small class="text-muted d-block mt-1">在移动模式下可以同时显示多个宠物</small>
+                                <!-- 列表：已添加宠物 -->
+                                <div class="mt-2" id="multiPetList"></div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -848,56 +849,159 @@ function updateSpineModelPreview() {
 window.addEventListener('DOMContentLoaded', function() {
     loadSpineModels();
     initPetModeSettings();
+    // 初始化多宠物列表
+    bindMultiPetList();
+    renderMovingPets();
 });
 
-// ==================== 宠物模式设置 ====================
-function initPetModeSettings() {
-    // 加载保存的宠物模式设置
-    const savedMode = localStorage.getItem('petMode') || 'fixed';
-    const fixedRadio = document.getElementById('petModeFixed');
-    const movingRadio = document.getElementById('petModeMoving');
+// 渲染多宠物列表（仅移动模式显示）
+function renderMovingPets(){
+    const container = document.getElementById('multiPetList');
     const controls = document.getElementById('multiPetControls');
-    const updateControls = ()=>{ if (controls) controls.style.display = (localStorage.getItem('petMode')||'fixed')==='moving' ? 'block' : 'none'; };
-    
-    if (savedMode === 'moving') {
-        movingRadio.checked = true;
-    } else {
-        fixedRadio.checked = true;
-    }
-    updateControls();
-    
-    // 绑定切换事件
-    fixedRadio.addEventListener('change', function() {
-        if (this.checked) {
-            localStorage.setItem('petMode', 'fixed');
-            if (typeof window.toggleMovingPet === 'function') {
-                window.toggleMovingPet(false);
-            }
-            updateControls();
-            showToast('已切换到固定宠物模式', 'success');
+    if (!container || !controls) return;
+    const mode = localStorage.getItem('petMode') || 'fixed';
+    controls.style.display = mode === 'moving' ? 'block' : 'none';
+
+    // 获取当前列表
+    let pets = [];
+    try {
+        if (typeof window.getMovingPets === 'function') {
+            pets = window.getMovingPets();
+        } else {
+            // 回退到localStorage（当不在dashboard_base或者移动容器未启用时）
+            pets = JSON.parse(localStorage.getItem('movingPets') || '[]').map((p, idx)=>({ index: idx, id: 'ls-'+idx, skelUrl: p.skelUrl, atlasUrl: p.atlasUrl }));
         }
+    } catch(e) { pets = []; }
+
+    // 构建列表DOM
+    if (!Array.isArray(pets) || pets.length === 0){
+        container.innerHTML = '<div class="text-muted small">尚未添加宠物</div>';
+        return;
+    }
+
+    const ul = document.createElement('div');
+    ul.className = 'list-group';
+    pets.forEach(item => {
+        const name = (item.skelUrl || '').split('/').pop() || '宠物';
+        const li = document.createElement('div');
+        li.className = 'list-group-item d-flex align-items-center justify-content-between';
+        li.innerHTML = `
+            <div class="d-flex align-items-center" style="gap:10px; overflow:hidden;">
+                <span class="badge bg-secondary">#${item.index+1}</span>
+                <span class="text-truncate" title="${name}">${name}</span>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-danger btn-sm" data-index="${item.index}">
+                    <i class="bi bi-x-circle"></i> 删除
+                </button>
+            </div>
+        `;
+        ul.appendChild(li);
     });
-    
-    movingRadio.addEventListener('change', function() {
-        if (this.checked) {
-            localStorage.setItem('petMode', 'moving');
-            // 延迟调用，确保DOM和脚本都准备好了
-            setTimeout(() => {
-                if (typeof window.toggleMovingPet === 'function') {
-                    window.toggleMovingPet(true);
-                    updateControls();
-                    showToast('已切换到移动宠物模式', 'success');
+    container.innerHTML = '';
+    container.appendChild(ul);
+
+    // 绑定删除按钮事件
+    container.querySelectorAll('button[data-index]').forEach(btn=>{
+        if (!btn._bound){
+            btn.addEventListener('click', ()=>{
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (typeof window.removePet === 'function'){
+                    const ok = window.removePet(idx);
+                    if (ok){
+                        showToast('已删除选中宠物', 'success');
+                    } else {
+                        showToast('删除失败：索引无效', 'warning');
+                    }
                 } else {
-                    showToast('当前页面不支持移动宠物模式', 'warning');
-                    // 回退到固定模式
-                    fixedRadio.checked = true;
-                    localStorage.setItem('petMode', 'fixed');
-                    updateControls();
+                    // 回退：操作localStorage
+                    try {
+                        const list = JSON.parse(localStorage.getItem('movingPets') || '[]');
+                        if (idx>=0 && idx<list.length){
+                            list.splice(idx,1);
+                            localStorage.setItem('movingPets', JSON.stringify(list));
+                            showToast('已删除选中宠物（待页面启用移动宠物后生效）', 'success');
+                        }
+                    } catch(e) {}
                 }
-            }, 100);
+                // 刷新列表
+                renderMovingPets();
+            });
+            btn._bound = true;
         }
     });
 }
 
+function bindMultiPetList(){
+    if (window._multiPetBound) return;
+    window._multiPetBound = true;
+    // 当宠物数组变化时，刷新列表
+    window.addEventListener('movingPetsChanged', (e)=>{
+        renderMovingPets();
+    });
+    // 当切换模式时，同步显隐
+    const fixedRadio = document.getElementById('petModeFixed');
+    const movingRadio = document.getElementById('petModeMoving');
+    if (fixedRadio && !fixedRadio._multi){
+        fixedRadio.addEventListener('change', ()=>renderMovingPets());
+        fixedRadio._multi = true;
+    }
+    if (movingRadio && !movingRadio._multi){
+        movingRadio.addEventListener('change', ()=>renderMovingPets());
+        movingRadio._multi = true;
+    }
+}
+
+// ==================== 宠物模式设置 ====================
+function initPetModeSettings() {
+    const savedMode = localStorage.getItem('petMode') || 'fixed';
+    const fixedRadio = document.getElementById('petModeFixed');
+    const movingRadio = document.getElementById('petModeMoving');
+    const controls = document.getElementById('multiPetControls');
+
+    const applyControls = () => {
+        if (controls) controls.style.display = (localStorage.getItem('petMode') || 'fixed') === 'moving' ? 'block' : 'none';
+    };
+
+    // 初始化选中状态
+    if (savedMode === 'moving') {
+        movingRadio && (movingRadio.checked = true);
+    } else {
+        fixedRadio && (fixedRadio.checked = true);
+    }
+    applyControls();
+
+    // 绑定切换事件
+    if (fixedRadio && !fixedRadio._boundMode){
+        fixedRadio.addEventListener('change', function(){
+            if (this.checked){
+                localStorage.setItem('petMode', 'fixed');
+                if (typeof window.toggleMovingPet === 'function') {
+                    window.toggleMovingPet(false);
+                }
+                applyControls();
+                renderMovingPets();
+                showToast('已切换到固定宠物模式', 'success');
+            }
+        });
+        fixedRadio._boundMode = true;
+    }
+    if (movingRadio && !movingRadio._boundMode){
+        movingRadio.addEventListener('change', function(){
+            if (this.checked){
+                localStorage.setItem('petMode', 'moving');
+                setTimeout(()=>{
+                    if (typeof window.toggleMovingPet === 'function') {
+                        window.toggleMovingPet(true);
+                    }
+                    applyControls();
+                    renderMovingPets();
+                    showToast('已切换到移动宠物模式', 'success');
+                }, 100);
+            }
+        });
+        movingRadio._boundMode = true;
+    }
+}
 </script>
 {% endblock %}
