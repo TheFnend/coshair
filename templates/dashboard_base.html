@@ -663,13 +663,43 @@
     (function() {
         // 使用PIXI.js实现移动宠物，完全参考simple_spine_viewer.html的成功实现
         let movingApp = null;
-        let currentMovingSpine = null;
-        let isMoving = false;
-        let moveDirection = 1;
-        let moveSpeed = 1;
-        let isPaused = false;
-        let isMouseInteracting = false;
-        let originalAnimation = '';
+        let movingPets = []; // 多宠物数组
+        let globalMoveSpeed = 1;
+        let tickerRunning = false; // 确保ticker只注册一次
+        
+        // MovingPet类定义 - 管理单个宠物的所有属性
+        class MovingPet {
+            constructor(spineObject, skelUrl, atlasUrl) {
+                this.spine = spineObject;
+                this.skelUrl = skelUrl;
+                this.atlasUrl = atlasUrl;
+                this.id = Date.now() + Math.random(); // 唯一ID
+                this.isMoving = false;
+                this.moveDirection = Math.random() > 0.5 ? 1 : -1; // 随机初始方向
+                this.moveSpeed = globalMoveSpeed;
+                this.isPaused = false;
+                this.isMouseInteracting = false;
+                this.originalAnimation = '';
+                this.currentAction = 'init';
+                this.actionStartTime = 0;
+                this.isInMoveAction = false;
+                this.hasInitialInteract = false;
+                this.bounds = null; // 缓存的边界信息
+            }
+            
+            // 清理宠物资源
+            destroy() {
+                if (this.spine) {
+                    if (movingApp && movingApp.stage && movingApp.stage.children.includes(this.spine)) {
+                        movingApp.stage.removeChild(this.spine);
+                    }
+                    this.spine.off('click');
+                    if (this.spine.destroy) {
+                        this.spine.destroy();
+                    }
+                }
+            }
+        }
         
         function initMovingPet() {
             // 检查PIXI是否可用
@@ -709,26 +739,14 @@
             return path.split('/').map(encodeURIComponent).join('/');
         }
         
-        function loadMovingSpineModel(skelUrl, atlasUrl) {
+        // 添加新宠物到多宠物系统
+        function addMovingPet(skelUrl, atlasUrl, callback) {
             if (!skelUrl || !atlasUrl) return;
             
             const loadingDiv = document.getElementById('spine-loading');
             if (loadingDiv) {
                 loadingDiv.style.display = 'block';
                 loadingDiv.textContent = '正在加载移动模型...';
-            }
-            
-            // 清理当前模型
-            if (currentMovingSpine) {
-                stopMoving();
-                currentMovingSpine.off('click', handleMouseClick);
-                if (movingApp && movingApp.stage) {
-                    movingApp.stage.removeChild(currentMovingSpine);
-                }
-                if (currentMovingSpine.destroy) {
-                    currentMovingSpine.destroy();
-                }
-                currentMovingSpine = null;
             }
             
             // 初始化PIXI应用（如果还没有）
@@ -811,14 +829,14 @@
                         if (loadingDiv) loadingDiv.style.display = 'none';
                         
                         // 创建Spine对象
-                        currentMovingSpine = new PIXI.spine.Spine(resources.movingModel.spineData);
+                        const spineObject = new PIXI.spine.Spine(resources.movingModel.spineData);
                         
                         // 设置初始位置
-                        currentMovingSpine.x = movingApp.screen.width / 2;
-                        currentMovingSpine.y = movingApp.screen.height / 2;
+                        spineObject.x = movingApp.screen.width / 2;
+                        spineObject.y = movingApp.screen.height / 2;
                         
                         // 计算合适的缩放比例
-                        const bounds = currentMovingSpine.getBounds();
+                        const bounds = spineObject.getBounds();
                         const scaleX = (movingApp.screen.width * 0.8) / bounds.width;
                         const scaleY = (movingApp.screen.height * 0.8) / bounds.height;
                         const baseScale = Math.min(scaleX, scaleY);
@@ -828,42 +846,72 @@
                         const hasHashInName = modelName.includes('#');
                         const scale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3,0.5);
                         
-                        currentMovingSpine.scale.set(scale);
+                        spineObject.scale.set(scale);
                         console.log(`模型缩放: ${modelName}, 包含#: ${hasHashInName}, 缩放比例: ${scale.toFixed(2)}`);
                         
                         // 缩放后重新调整位置：水平居中，底部精确贴合
-                        currentMovingSpine.x = movingApp.screen.width / 2;
-                        currentMovingSpine.y = movingApp.screen.height;
+                        spineObject.x = movingApp.screen.width / 2;
+                        spineObject.y = movingApp.screen.height;
+                        
+                        // 创建MovingPet实例
+                        const pet = new MovingPet(spineObject, skelUrl, atlasUrl);
+                        pet.isMoving = true;
                         
                         // 添加到舞台
-                        movingApp.stage.addChild(currentMovingSpine);
+                        movingApp.stage.addChild(spineObject);
                         
                         // 设置模型为可交互
-                        currentMovingSpine.interactive = true;
-                        currentMovingSpine.buttonMode = true;
+                        spineObject.interactive = true;
+                        spineObject.buttonMode = true;
                         
                         // 添加鼠标点击事件监听器
-                        currentMovingSpine.on('click', handleMouseClick);
+                        spineObject.on('click', () => handleMouseClick(pet));
                         
                         // 优先播放move动画，如果没有则播放第一个动画
-                        let defaultAnimation = currentMovingSpine.state.data.skeletonData.animations.find(anim => 
+                        let defaultAnimation = spineObject.state.data.skeletonData.animations.find(anim => 
                             anim.name.toLowerCase().includes('move') || anim.name.toLowerCase().includes('walk')
                         );
                         if (!defaultAnimation) {
-                            defaultAnimation = currentMovingSpine.state.data.skeletonData.animations[0];
+                            defaultAnimation = spineObject.state.data.skeletonData.animations[0];
                         }
                         
                         if (defaultAnimation) {
-                            currentMovingSpine.state.setAnimation(0, defaultAnimation.name, true);
-                            originalAnimation = defaultAnimation.name;
+                            spineObject.state.setAnimation(0, defaultAnimation.name, true);
+                            pet.originalAnimation = defaultAnimation.name;
                         }
                         
+                        // 添加到多宠物数组
+                        movingPets.push(pet);
+                        
+                        // 初始位置避让：尽量放在不与其它宠物重叠的位置
+                        try {
+                            const pad = 8; // 适度的间距
+                            const maxTries = 20;
+                            // 获取当前宠物的宽度估计
+                            const b = getPetBounds(pet);
+                            const estW = (b && b.width) ? b.width : (movingApp.screen.width * 0.1);
+                            let placed = false;
+                            for (let t = 0; t < maxTries && !placed; t++) {
+                                const x = Math.random() * (movingApp.screen.width - estW) + estW / 2;
+                                spineObject.x = x;
+                                spineObject.y = movingApp.screen.height; // 贴底
+                                const nowB = getPetBounds(pet);
+                                placed = true;
+                                for (const other of movingPets) {
+                                    if (other === pet) continue;
+                                    const ob = getPetBounds(other);
+                                    if (ob && nowB && ob.right > nowB.left - pad && ob.left < nowB.right + pad) {
+                                        placed = false; break;
+                                    }
+                                }
+                            }
+                        } catch (e) { console.warn('初始避碰失败', e); }
+                        
                         // 启动移动
-                        isMoving = true;
                         startMoving();
                         
                         console.log('移动Spine模型加载成功！');
-                        console.log('可用动画:', currentMovingSpine.state.data.skeletonData.animations.map(anim => anim.name));
+                        console.log('可用动画:', spineObject.state.data.skeletonData.animations.map(anim => anim.name));
                     } catch (e) {
                         console.error('创建移动Spine对象时出错:', e);
                         const loadingDiv = document.getElementById('spine-loading');
@@ -884,17 +932,44 @@
         }
         
         function startMoving() {
-            if (!currentMovingSpine || !isMoving || !movingApp) return;
-            
+            if (!movingApp || movingPets.length === 0) return;
+            if (tickerRunning) return; // 防止重复添加导致速度翻倍
             movingApp.ticker.add(moveModel);
+            tickerRunning = true;
         }
         
         function stopMoving() {
-            isMoving = false;
-            isPaused = false;
+            movingPets.forEach(pet => {
+                pet.isMoving = false;
+                pet.isPaused = false;
+            });
             if (movingApp) {
                 movingApp.ticker.remove(moveModel);
             }
+            tickerRunning = false;
+        }
+        
+        // 添加清除所有宠物的函数
+        function clearAllPets() {
+            movingPets.forEach(pet => pet.destroy());
+            movingPets = [];
+            stopMoving();
+            console.log('已清除所有移动宠物');
+        }
+        
+        // 添加删除单个宠物的函数
+        function removePet(petIndex) {
+            if (petIndex >= 0 && petIndex < movingPets.length) {
+                const pet = movingPets[petIndex];
+                pet.destroy();
+                movingPets.splice(petIndex, 1);
+                if (movingPets.length === 0) {
+                    stopMoving();
+                }
+                console.log(`已删除宠物 ${petIndex}`);
+                return true;
+            }
+            return false;
         }
         
         // 新的状态管理变量
@@ -912,15 +987,14 @@
             'special': 16    // 如果模型有special动作
         };
         
-        // 加权随机选择动作
-        function selectWeightedAction() {
-            if (!currentMovingSpine) return 'relax';
+        // 加权随机选择动作（按宠物）
+        function selectWeightedAction(pet) {
+            if (!pet || !pet.spine) return 'relax';
             
-            const animations = currentMovingSpine.state.data.skeletonData.animations;
+            const animations = pet.spine.state.data.skeletonData.animations;
             const weights = [];
             const actions = [];
             
-            // 检查relax/idle动作
             const hasRelaxIdle = animations.some(anim => {
                 const name = anim.name.toLowerCase();
                 return name.includes('relax') || name.includes('idle');
@@ -930,7 +1004,6 @@
                 actions.push('relax');
             }
             
-            // 检查sleep动作
             const hasSleep = animations.some(anim => 
                 anim.name.toLowerCase().includes('sleep')
             );
@@ -939,7 +1012,6 @@
                 actions.push('sleep');
             }
             
-            // 检查move动作（分为左右两个方向）
             const hasMove = animations.some(anim => {
                 const name = anim.name.toLowerCase();
                 return name.includes('move') || name.includes('walk') || name.includes('run');
@@ -951,7 +1023,6 @@
                 actions.push('move_right');
             }
             
-            // 检查special动作
             const hasSpecial = animations.some(anim => 
                 anim.name.toLowerCase().includes('special')
             );
@@ -960,7 +1031,6 @@
                 actions.push('special');
             }
             
-            // 加权随机选择
             const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
             let random = Math.random() * totalWeight;
             
@@ -974,14 +1044,14 @@
             return actions[0] || 'relax';
         }
         
-        // 执行指定动作
-        function performAction(action) {
-            if (!currentMovingSpine) return;
+        // 执行动作（按宠物）
+        function performAction(pet, action) {
+            if (!pet || !pet.spine) return;
             
-            currentAction = action;
-            actionStartTime = Date.now();
+            pet.currentAction = action;
+            pet.actionStartTime = Date.now();
             
-            const animations = currentMovingSpine.state.data.skeletonData.animations;
+            const animations = pet.spine.state.data.skeletonData.animations;
             let targetAnimation = null;
             
             switch (action) {
@@ -990,24 +1060,23 @@
                         const name = anim.name.toLowerCase();
                         return name.includes('relax') || name.includes('idle');
                     });
-                    isInMoveAction = false;
+                    pet.isInMoveAction = false;
                     break;
                 case 'sleep':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('sleep')
                     );
-                    isInMoveAction = false;
+                    pet.isInMoveAction = false;
                     break;
                 case 'move_left':
                     targetAnimation = animations.find(anim => {
                         const name = anim.name.toLowerCase();
                         return name.includes('move') || name.includes('walk') || name.includes('run');
                     });
-                    isInMoveAction = true;
-                    // 设置向左移动
-                    moveDirection = -1;
-                    if (currentMovingSpine.skeleton) {
-                        currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+                    pet.isInMoveAction = true;
+                    pet.moveDirection = -1;
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
                     }
                     break;
                 case 'move_right':
@@ -1015,28 +1084,26 @@
                         const name = anim.name.toLowerCase();
                         return name.includes('move') || name.includes('walk') || name.includes('run');
                     });
-                    isInMoveAction = true;
-                    // 设置向右移动
-                    moveDirection = 1;
-                    if (currentMovingSpine.skeleton) {
-                        currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+                    pet.isInMoveAction = true;
+                    pet.moveDirection = 1;
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
                     }
                     break;
                 case 'special':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('special')
                     );
-                    isInMoveAction = false;
+                    pet.isInMoveAction = false;
                     break;
                 case 'interact':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('interact')
                     );
-                    isInMoveAction = false;
+                    pet.isInMoveAction = false;
                     break;
             }
             
-            // 如果找不到特定动画，使用默认动画
             if (!targetAnimation) {
                 targetAnimation = animations.find(anim => 
                     anim.name.toLowerCase().includes('idle')
@@ -1045,30 +1112,25 @@
             
             if (targetAnimation) {
                 const isLoop = action === 'move_left' || action === 'move_right' || action === 'relax';
-                currentMovingSpine.state.setAnimation(0, targetAnimation.name, isLoop);
-                console.log(`执行动作: ${action}, 动画: ${targetAnimation.name}, 循环: ${isLoop}`);
+                pet.spine.state.setAnimation(0, targetAnimation.name, isLoop);
                 
-                // 为非循环动画设置完成监听器
                 if (!isLoop) {
-                    currentMovingSpine.state.addListener({
+                    pet.spine.state.addListener({
                         complete: function(entry) {
                             if (entry.animation.name === targetAnimation.name) {
-                                console.log(`动作 ${action} 完成，选择下一个动作`);
-                                // 移除监听器
-                                currentMovingSpine.state.clearListeners();
-                                // 选择下一个动作
-                                const nextAction = selectWeightedAction();
-                                performAction(nextAction);
+                                // 清除监听器，选择下一个动作
+                                pet.spine.state.clearListeners();
+                                const nextAction = selectWeightedAction(pet);
+                                performAction(pet, nextAction);
                             }
                         }
                     });
                 } else {
-                    // 循环动画设置随机持续时间后切换
                     const duration = 3000 + Math.random() * 5000; // 3-8秒
                     setTimeout(() => {
-                        if (currentAction === action && !isMouseInteracting) {
-                            const nextAction = selectWeightedAction();
-                            performAction(nextAction);
+                        if (pet.currentAction === action && !pet.isMouseInteracting) {
+                            const nextAction = selectWeightedAction(pet);
+                            performAction(pet, nextAction);
                         }
                     }, duration);
                 }
@@ -1076,89 +1138,141 @@
         }
         
         function moveModel() {
-            if (!currentMovingSpine || !isMoving) return;
+            if (!movingApp || movingPets.length === 0) return;
             
-            // 如果正在鼠标交互中，停止移动
-            if (isMouseInteracting) {
-                return;
-            }
-            
-            // 初始化时执行interact动作
-            if (!hasInitialInteract) {
-                hasInitialInteract = true;
-                performAction('interact');
-                return;
-            }
-            
-            // 只有在move动作时才移动
-            if (isInMoveAction && (currentAction === 'move_left' || currentAction === 'move_right')) {
-                // 移动模型
-                currentMovingSpine.x += moveDirection * moveSpeed;
+            for (const pet of movingPets) {
+                if (!pet.isMoving || !pet.spine) continue;
                 
-                // 检查边界并反转方向
-                if (currentMovingSpine.x <= 0) {
-                    moveDirection = 1;
-                    if (currentMovingSpine.skeleton) {
-                        currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+                // 鼠标交互中，不移动
+                if (pet.isMouseInteracting) continue;
+                
+                // 初始化时执行一次interact
+                if (!pet.hasInitialInteract) {
+                    pet.hasInitialInteract = true;
+                    performAction(pet, 'interact');
+                    continue;
+                }
+                
+                if (pet.isInMoveAction && (pet.currentAction === 'move_left' || pet.currentAction === 'move_right')) {
+                    pet.spine.x += pet.moveDirection * pet.moveSpeed;
+                    
+                    if (pet.spine.x <= 0) {
+                        pet.moveDirection = 1;
+                        if (pet.spine.skeleton) {
+                            pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                        }
+                    } else if (pet.spine.x >= window.innerWidth) {
+                        pet.moveDirection = -1;
+                        if (pet.spine.skeleton) {
+                            pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
+                        }
                     }
-                } else if (currentMovingSpine.x >= window.innerWidth) {
-                    moveDirection = -1;
-                    if (currentMovingSpine.skeleton) {
-                        currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+                }
+            }
+
+            // 碰撞与重叠分离（简单O(n^2)）
+            separateOverlappingPets();
+        }
+
+        // 计算宠物近似边界（仅用于水平碰撞）
+        function getPetBounds(pet) {
+            if (!pet || !pet.spine) return null;
+            try {
+                const b = pet.spine.getBounds();
+                // Spine的bounds以其局部空间为主，我们更关注屏幕上的矩形
+                const width = b.width;
+                const height = b.height;
+                const centerX = pet.spine.x; // 已在舞台坐标系
+                const right = centerX + width / 2;
+                const left = centerX - width / 2;
+                // 贴底，因此只做X轴分离
+                return { left, right, width, height };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function separateOverlappingPets() {
+            const pad = 4; // 需要保留的最小间距
+            const maxPush = 6; // 限制每帧最大分离位移，避免突然跃迁
+            for (let i = 0; i < movingPets.length; i++) {
+                const a = movingPets[i];
+                const ab = getPetBounds(a);
+                if (!ab) continue;
+                for (let j = i + 1; j < movingPets.length; j++) {
+                    const b = movingPets[j];
+                    const bb = getPetBounds(b);
+                    if (!bb) continue;
+                    const overlap = Math.min(ab.right, bb.right) - Math.max(ab.left, bb.left);
+                    if (overlap > 0) { // 仅在真实重叠时分离，减少抖动
+                        // 基于中心相对位置的对称分离，避免按移动方向导致“换位”
+                        let dir = Math.sign((a.spine.x || 0) - (b.spine.x || 0));
+                        if (dir === 0) dir = (i < j ? 1 : -1);
+                        const push = Math.min((overlap + pad) / 2, maxPush);
+                        a.spine.x += dir * push;
+                        b.spine.x -= dir * push;
+                        // 边界修正
+                        a.spine.x = Math.max(0, Math.min(window.innerWidth, a.spine.x));
+                        b.spine.x = Math.max(0, Math.min(window.innerWidth, b.spine.x));
                     }
                 }
             }
         }
         
-        // 旧的startRandomPause函数已被新的权重系统替代
-        
-        function handleMouseClick() {
-            if (!currentMovingSpine || isMouseInteracting) return;
+        function handleMouseClick(pet) {
+            if (!pet || !pet.spine || pet.isMouseInteracting) return;
             
-            // 寻找interact动画
-            const interactAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+            const interactAnimations = pet.spine.state.data.skeletonData.animations.filter(anim => 
                 anim.name.toLowerCase().includes('interact')
             );
             
             if (interactAnimations.length > 0) {
                 const interactAnim = interactAnimations[0];
-                currentMovingSpine.state.setAnimation(0, interactAnim.name, false); // 播放一次，不循环
-                console.log(`鼠标点击，播放动画: ${interactAnim.name}`);
+                pet.spine.state.setAnimation(0, interactAnim.name, false);
+                pet.isMouseInteracting = true;
                 
-                isMouseInteracting = true;
-                
-                // 设置动画完成后的回调
-                currentMovingSpine.state.addListener({
+                pet.spine.state.addListener({
                     complete: function(entry) {
-                        if (entry.animation.name === interactAnim.name && isMouseInteracting) {
-                            // interact动画播放完成，选择下一个加权随机动作
-                            isMouseInteracting = false;
-                            console.log(`interact动画完成，选择下一个动作`);
-                            // 移除监听器
-                            currentMovingSpine.state.clearListeners();
-                            // 选择下一个动作
-                            const nextAction = selectWeightedAction();
-                            performAction(nextAction);
+                        if (entry.animation.name === interactAnim.name && pet.isMouseInteracting) {
+                            pet.isMouseInteracting = false;
+                            pet.spine.state.clearListeners();
+                            const nextAction = selectWeightedAction(pet);
+                            performAction(pet, nextAction);
                         }
                     }
                 });
             }
         }
         
-        // 暴露全局函数
+        // 兼容旧接口：将loadMovingSpineModel映射到addMovingPet
+        function loadMovingSpineModel(skelUrl, atlasUrl, callback) {
+            return addMovingPet(skelUrl, atlasUrl, callback);
+        }
+        
+        // 暴露管理函数到window，供设置页调用
+        window.addMovingPet = addMovingPet;
+        window.clearAllPets = clearAllPets;
+        window.removePet = removePet;
+        window.removeLastPet = function() {
+            if (movingPets.length > 0) {
+                removePet(movingPets.length - 1);
+            }
+        };
+
+        // 在dashboard_base中也实现切换移动宠物模式的函数
         window.toggleMovingPet = function(enable) {
             const container = document.getElementById('spine-moving-pet');
             const fixedPet = document.getElementById('spine-pet');
-            
+            if (!container || !fixedPet) return;
+
             if (enable) {
                 container.style.display = 'block';
                 fixedPet.style.display = 'none';
-                
-                // 初始化移动宠物
+
                 if (!movingApp) {
                     initMovingPet();
                 }
-                
+
                 // 动态获取当前选择的模型
                 fetch('/api/spine_model/current')
                     .then(response => response.json())
@@ -1166,7 +1280,7 @@
                         if (data.success && data.skel_path && data.atlas_path) {
                             setTimeout(() => loadMovingSpineModel(data.skel_path, data.atlas_path), 100);
                         } else {
-                            // 回退到模板变量
+                            // 回退到模板变量（若存在）
                             const skelUrl = '{{ SPINE_MODEL_SKEL }}';
                             const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
                             if (skelUrl && atlasUrl) {
@@ -1176,7 +1290,7 @@
                     })
                     .catch(error => {
                         console.error('获取当前模型失败:', error);
-                        // 回退到模板变量
+                        // 回退到模板变量（若存在）
                         const skelUrl = '{{ SPINE_MODEL_SKEL }}';
                         const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
                         if (skelUrl && atlasUrl) {
@@ -1189,11 +1303,11 @@
                 stopMoving();
             }
         };
-        
+
         window.refreshMovingPet = function(newSkelUrl, newAtlasUrl) {
              if (document.getElementById('spine-moving-pet').style.display !== 'none') {
-                 // 重置初始化标志，确保刷新后也会执行初始interact动作
-                 hasInitialInteract = false;
+                 // 重置每只宠物的初始化交互标志，确保刷新后也会执行初始interact动作
+                 movingPets.forEach(p => p.hasInitialInteract = false);
                  loadMovingSpineModel(newSkelUrl, newAtlasUrl);
              }
          };

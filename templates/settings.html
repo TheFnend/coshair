@@ -309,6 +309,25 @@
                                     <i class="bi bi-arrow-repeat"></i> 刷新宠物
                                 </button>
                             </div>
+                            
+                            <!-- 多宠物管理（仅移动模式下显示） -->
+                            <div class="mt-3" id="multiPetControls" style="display: none;">
+                                <label class="form-label text-info">
+                                    <i class="bi bi-collection"></i> 多宠物管理
+                                </label>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="addPetBtn" title="添加一个新宠物">
+                                        <i class="bi bi-plus-circle"></i> 添加宠物
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm" id="removeLastPetBtn" title="删除最后一个宠物">
+                                        <i class="bi bi-dash-circle"></i> 删除最后
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllPetsBtn" title="清空所有宠物">
+                                        <i class="bi bi-trash"></i> 清空全部
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block mt-1">在移动模式下可以同时显示多个宠物</small>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <div id="spineModelPreview" style="height: 200px; border: 2px dashed #E6EFF5; border-radius: 15px; display: flex; align-items: center; justify-content: center; background: #f8f9fa;">
@@ -711,6 +730,60 @@ function bindRefreshButtons(){
         });
         refreshPetBtn._bound = true;
     }
+
+    // 绑定多宠物按钮（仅在移动模式显示）
+    const addBtn = document.getElementById('addPetBtn');
+    const removeLastBtn = document.getElementById('removeLastPetBtn');
+    const clearAllBtn = document.getElementById('clearAllPetsBtn');
+    const controls = document.getElementById('multiPetControls');
+
+    const applyControlsVisibility = () => {
+        const mode = localStorage.getItem('petMode') || 'fixed';
+        controls && (controls.style.display = mode === 'moving' ? 'block' : 'none');
+    };
+    applyControlsVisibility();
+
+    if (addBtn && !addBtn._bound){
+        addBtn.addEventListener('click', ()=>{
+            const select = document.getElementById('spineModelSelect');
+            const opt = select.options[select.selectedIndex];
+            if (opt && opt.dataset && opt.dataset.skel && opt.dataset.atlas){
+                const skel = safeUrl(opt.dataset.skel);
+                const atlas = safeUrl(opt.dataset.atlas);
+                if (typeof window.addMovingPet === 'function'){
+                    window.addMovingPet(skel, atlas);
+                    showToast('已添加一个移动宠物', 'success');
+                } else {
+                    showToast('当前页面不支持添加移动宠物', 'warning');
+                }
+            }
+        });
+        addBtn._bound = true;
+    }
+
+    if (removeLastBtn && !removeLastBtn._bound){
+        removeLastBtn.addEventListener('click', ()=>{
+            if (typeof window.removeLastPet === 'function'){
+                window.removeLastPet();
+                showToast('已删除最后一个宠物', 'success');
+            } else {
+                showToast('当前页面不支持删除宠物', 'warning');
+            }
+        });
+        removeLastBtn._bound = true;
+    }
+
+    if (clearAllBtn && !clearAllBtn._bound){
+        clearAllBtn.addEventListener('click', ()=>{
+            if (typeof window.clearAllPets === 'function'){
+                window.clearAllPets();
+                showToast('已清空所有宠物', 'success');
+            } else {
+                showToast('当前页面不支持清空宠物', 'warning');
+            }
+        });
+        clearAllBtn._bound = true;
+    }
 }
 
 function bindModelSearch(){
@@ -783,14 +856,15 @@ function initPetModeSettings() {
     const savedMode = localStorage.getItem('petMode') || 'fixed';
     const fixedRadio = document.getElementById('petModeFixed');
     const movingRadio = document.getElementById('petModeMoving');
+    const controls = document.getElementById('multiPetControls');
+    const updateControls = ()=>{ if (controls) controls.style.display = (localStorage.getItem('petMode')||'fixed')==='moving' ? 'block' : 'none'; };
     
     if (savedMode === 'moving') {
         movingRadio.checked = true;
-        // 不在这里启用移动宠物，让dashboard_base.html的DOMContentLoaded统一处理
-        // 避免重复调用导致状态冲突
     } else {
         fixedRadio.checked = true;
     }
+    updateControls();
     
     // 绑定切换事件
     fixedRadio.addEventListener('change', function() {
@@ -799,6 +873,7 @@ function initPetModeSettings() {
             if (typeof window.toggleMovingPet === 'function') {
                 window.toggleMovingPet(false);
             }
+            updateControls();
             showToast('已切换到固定宠物模式', 'success');
         }
     });
@@ -810,12 +885,14 @@ function initPetModeSettings() {
             setTimeout(() => {
                 if (typeof window.toggleMovingPet === 'function') {
                     window.toggleMovingPet(true);
+                    updateControls();
                     showToast('已切换到移动宠物模式', 'success');
                 } else {
                     showToast('当前页面不支持移动宠物模式', 'warning');
                     // 回退到固定模式
                     fixedRadio.checked = true;
                     localStorage.setItem('petMode', 'fixed');
+                    updateControls();
                 }
             }, 100);
         }
