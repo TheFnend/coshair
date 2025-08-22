@@ -675,6 +675,9 @@
         const MAX_SPEED_X = 2500.0;
         const MAX_SPEED_Y = 3500.0;
         
+        // 碰撞设置
+        let collisionEnabled = true; // 默认启用碰撞
+        
         // MovingPet类定义 - 管理单个宠物的所有属性
         class MovingPet {
             constructor(spineObject, skelUrl, atlasUrl) {
@@ -1243,8 +1246,10 @@
                     else if (pet.vx < -5) pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
                 }
             }
-            // 碰撞与重叠分离
-            separateOverlappingPets();
+            // 碰撞与重叠分离（根据设置决定是否执行）
+            if (collisionEnabled) {
+                separateOverlappingPets();
+            }
         }
 
         // 计算宠物近似边界（仅用于水平碰撞）
@@ -1543,6 +1548,23 @@
         window.getMovingPets = function(){
             return movingPets.map((p, index)=>({ index, id: p.id, skelUrl: p.skelUrl, atlasUrl: p.atlasUrl }));
         };
+        
+        // 碰撞设置控制函数
+        window.updateCollisionSettings = function(enabled) {
+            collisionEnabled = enabled;
+            console.log('宠物碰撞设置已更新:', enabled ? '启用' : '禁用');
+        };
+        
+        // 初始化碰撞设置（从localStorage读取）
+        function initCollisionSettings() {
+            const saved = localStorage.getItem('petCollisionEnabled');
+            if (saved !== null) {
+                collisionEnabled = saved === 'true';
+            }
+        }
+        
+        // 页面加载时初始化碰撞设置
+        initCollisionSettings();
 
         // 在dashboard_base中也实现切换移动宠物模式的函数
         window.toggleMovingPet = function(enable) {
