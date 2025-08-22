@@ -1,5 +1,3 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -671,6 +669,7 @@
         const GRAVITY = 2200;       // px/s^2
         const AIR_FRICTION = 2.0;   // 空气阻力
         const STATIC_FRICTION = 900.0; // 地面静摩擦
+        const DYNAMIC_FRICTION = 300.0; // 动态摩擦（移动时使用，低于静摩擦）
         const RESILIENCE = 0.3;     // 水平弹性（墙面反弹系数）
         const DROP_THRESHOLD = 10.0; // 触发落地一次的最小高度
         const MAX_SPEED_X = 2500.0;
@@ -1186,6 +1185,13 @@
                     performAction(pet, 'interact');
                 }
                 const wasOnGround = !!pet.isOnGround;
+                
+                // 移动动作：给宠物施加水平推力
+                if (pet.isInMoveAction && pet.moveDirection) {
+                    const moveForce = pet.isOnGround ? 800 : 400; // 地面推力更强，空中推力较弱
+                    pet.vx += pet.moveDirection * moveForce * dt;
+                }
+                
                 // 重力（离地才生效）
                 if (!pet.isOnGround) {
                     pet.vy += GRAVITY * dt;
@@ -1194,10 +1200,11 @@
                 const air = Math.max(0, 1 - AIR_FRICTION * dt);
                 pet.vx *= air;
                 if (!pet.isOnGround) pet.vy *= air;
-                // 地面静摩擦
+                // 地面摩擦：移动时用动态摩擦，否则用静摩擦
                 if (pet.isOnGround) {
+                    const groundFriction = pet.isInMoveAction ? DYNAMIC_FRICTION : STATIC_FRICTION;
                     const sign = Math.sign(pet.vx);
-                    const mag = Math.max(0, Math.abs(pet.vx) - STATIC_FRICTION * dt);
+                    const mag = Math.max(0, Math.abs(pet.vx) - groundFriction * dt);
                     pet.vx = sign * mag;
                 }
                 // 限速
