@@ -1333,6 +1333,14 @@
                 void main(void) {
                     vec4 base = texture2D(uSampler, vTextureCoord);
                     float a = base.a;
+                    
+                    // 如果当前像素已经有内容，直接返回原色，不添加描边
+                    if (a > 0.01) {
+                        gl_FragColor = base;
+                        return;
+                    }
+                    
+                    // 只对透明像素检测邻域
                     float maxAlpha = 0.0;
                     // 采样邻域 8 个方向
                     for (int x = -1; x <= 1; x++) {
@@ -1343,12 +1351,13 @@
                             maxAlpha = max(maxAlpha, s.a);
                         }
                     }
-                    float outline = clamp(maxAlpha - a, 0.0, 1.0);
-                    // 若当前像素本身不可见但邻域可见 -> 绘制描边色；否则保持原色
-                    vec4 color = (a < 0.01 && outline > 0.0)
-                        ? vec4(outlineColor.rgb, outlineColor.a * outline)
-                        : base;
-                    gl_FragColor = color;
+                    
+                    // 只有在透明区域且邻域有内容时才绘制描边
+                    if (maxAlpha > 0.01) {
+                        gl_FragColor = vec4(outlineColor.rgb, outlineColor.a);
+                    } else {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0); // 完全透明
+                    }
                 }
             `;
             
@@ -1356,7 +1365,7 @@
                 if (!window.globalDragOutlineFilter) {
                     window.globalDragOutlineFilter = new PIXI.Filter(undefined, dragOutlineShaderFrag, {
                         pixelSize: new Float32Array([1 / movingApp.screen.width, 1 / movingApp.screen.height]),
-                        thickness: 30.0,
+                        thickness: 20.0,  // 减小thickness避免白边
                         outlineColor: new Float32Array([1.0, 0.84, 0.0, 1.0]) // 黄色 #FFD400
                     });
                 }
