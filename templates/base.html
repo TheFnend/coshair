@@ -16,7 +16,7 @@
     <title>{% block title %}07妙妙屋{% endblock %}</title>
     
     <!-- 自定义图标字体 -->
-    <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet" >
+    <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet">
     
     <!-- Bootstrap CSS框架 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -39,7 +39,7 @@
         
         /* 表格行背景色 - 斑马线形式 */
         .table tbody tr {
-            /* background-color: white !important;  默认白色背景 */
+            /* background-color: white !important;  */
         }
 
         /* ==================== 图标字体样式 ==================== */
@@ -992,7 +992,43 @@
         let isPaused = false;
         let isMouseInteracting = false;
         let originalAnimation = '';
-        
+        // 新增：拖拽/下落状态
+        let isDragging = false;
+        let isFalling = false;
+        let velocityY = 0;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let highlightGfx = null;
+        // 新增：惯性物理状态与常量
+        const gravity = 2200; // px/s^2
+        const airFriction = 2.0;       // 空气阻力（越大衰减越快）
+        const staticFriction = 900.0;  // 地面静摩擦（px/s^2 等效）
+        const resilience = 0.3;        // 水平弹性（0~1）
+        const droppedThreshold = 10.0; // 触发“落地一次”的最小高度（px）
+        const maxSpeedX = 2500.0;      // 水平最大速度
+        const maxSpeedY = 3500.0;      // 垂直最大速度
+        let vx = 0, vy = 0;            // 当前速度
+        let isOnGround = true;         // 是否在地面
+        let dropStartY = null;         // 记录离地时高度
+        const pointerSamples = [];     // 拖拽采样用于释放瞬时速度计算
+        function pushPointerSample(x, y, tMs) {
+          pointerSamples.push({ x, y, t: tMs });
+          const cutoff = tMs - 160; // 仅保留最近约160ms
+          while (pointerSamples.length && pointerSamples[0].t < cutoff) {
+            pointerSamples.shift();
+          }
+        }
+        function computeReleaseVelocity() {
+          const n = pointerSamples.length;
+          if (n < 2) return { vx: 0, vy: 0 };
+          const end = pointerSamples[n - 1];
+          let i = n - 2;
+          while (i >= 0 && (end.t - pointerSamples[i].t) < 60) i--;
+          i = Math.max(0, i);
+          const start = pointerSamples[i];
+          const dt = Math.max(1, end.t - start.t) / 1000; // s
+          return { vx: (end.x - start.x) / dt, vy: (end.y - start.y) / dt };
+        }
         function initMovingPet() {
             if (typeof PIXI === 'undefined' || typeof PIXI.spine === 'undefined') {
                 console.error('PIXI.js or PIXI.spine not available');
@@ -1015,6 +1051,10 @@
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true
             });
+            // 确保画布不拦截鼠标事件（使用全局代理来处理拖拽）
+            if (movingApp && movingApp.view) {
+                try { movingApp.view.style.pointerEvents = 'none'; } catch(_) {}
+            }
             
             // 窗口大小改变时调整canvas
             window.addEventListener('resize', () => {
@@ -1127,7 +1167,8 @@
                     // 设置交互
                     currentMovingSpine.interactive = true;
                     currentMovingSpine.buttonMode = true;
-                    currentMovingSpine.on('click', handleMouseClick);
+                    // 改为拖拽触发交互（落地后），不再点击触发
+                    currentMovingSpine.cursor = 'grab';
                     
                     // 寻找合适的移动动画
                     const animations = currentMovingSpine.state.data.skeletonData.animations;
@@ -1171,26 +1212,157 @@
             }
         }
         
+        // 新增：命中测试与全局拖拽代理（单宠物）
+        function toStageXY(e){
+          if (!movingApp || !movingApp.view) return {x:0,y:0};
+          const rect = movingApp.view.getBoundingClientRect();
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        function getPetScreenRect(){
+          if (!currentMovingSpine || !movingApp || !movingApp.view) return null;
+          try {
+            const b = currentMovingSpine.getBounds();
+            const rect = movingApp.view.getBoundingClientRect();
+            const left = rect.left + b.x;
+            const top = rect.top + b.y;
+            const width = b.width;
+            const height = b.height;
+            return { left, top, right: left + width, bottom: top + height };
+          } catch (_) { return null; }
+        }
+        function pointInRect(x, y, r){ return r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+        function drawHighlight(){
+          if (!currentMovingSpine || !movingApp) return;
+          try {
+            const b = currentMovingSpine.getBounds();
+            if (!highlightGfx) {
+              highlightGfx = new PIXI.Graphics();
+              highlightGfx.zIndex = (currentMovingSpine.zIndex || 0) + 1;
+              movingApp.stage.addChild(highlightGfx);
+              if (movingApp.stage.sortableChildren !== true) movingApp.stage.sortableChildren = true;
+            }
+            highlightGfx.clear();
+            highlightGfx.lineStyle(3, 0xFFD400, 1);
+            highlightGfx.drawRect(b.x, b.y, b.width, b.height);
+          } catch (_) {}
+        }
+        function removeHighlight(){
+          if (highlightGfx && movingApp && movingApp.stage) {
+            try { highlightGfx.clear(); movingApp.stage.removeChild(highlightGfx); } catch (_) {}
+            highlightGfx = null;
+          }
+        }
+        function onPointerDown(e){
+          const container = document.getElementById('spine-moving-pet');
+          if (!container || container.style.display === 'none') return;
+          const r = getPetScreenRect();
+          if (!pointInRect(e.clientX, e.clientY, r)) return;
+          if (!currentMovingSpine) return;
+          const { x, y } = toStageXY(e);
+          isDragging = true;
+          isMouseInteracting = true; // 暂停自动/随机
+          vx = 0; vy = 0; // 清零物理速度
+          dragOffsetX = currentMovingSpine.x - x;
+          dragOffsetY = currentMovingSpine.y - y;
+          dropStartY = currentMovingSpine.y;
+          pointerSamples.length = 0;
+          pushPointerSample(x, y, (self.performance ? performance.now() : Date.now()));
+          drawHighlight();
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        function onPointerMove(e){
+          if (!isDragging || !currentMovingSpine) return;
+          const { x, y } = toStageXY(e);
+          currentMovingSpine.x = Math.max(0, Math.min(movingApp.screen.width, x + dragOffsetX));
+          currentMovingSpine.y = Math.max(0, y + dragOffsetY);
+          pushPointerSample(x, y, (self.performance ? performance.now() : Date.now()));
+          drawHighlight();
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        function onPointerUp(e){
+          if (!isDragging) return;
+          removeHighlight();
+          isDragging = false;
+          isMouseInteracting = false;
+          const v = computeReleaseVelocity();
+          vx = v.vx; vy = v.vy;
+          isOnGround = false; // 空中自由运动
+          dropStartY = currentMovingSpine ? currentMovingSpine.y : null;
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('pointermove', onPointerMove, true);
+        document.addEventListener('pointerup', onPointerUp, true);
+        document.addEventListener('pointercancel', onPointerUp, true);
+        
+        // 用惯性物理替换移动更新
         function moveModel() {
-            if (!currentMovingSpine || !isMoving || isMouseInteracting || isPaused) return;
-            
-            currentMovingSpine.x += moveDirection * moveSpeed;
-            
-            if (currentMovingSpine.x <= 0) {
-                moveDirection = 1;
-                if (currentMovingSpine.skeleton) {
-                    currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
-                }
-            } else if (currentMovingSpine.x >= window.innerWidth) {
-                moveDirection = -1;
-                if (currentMovingSpine.skeleton) {
-                    currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
-                }
+          if (!currentMovingSpine || !isMoving) return;
+          // 拖拽时不更新物理
+          if (isDragging) return;
+          const dt = (movingApp && movingApp.ticker && typeof movingApp.ticker.deltaMS === 'number') ? (movingApp.ticker.deltaMS / 1000) : (1/60);
+          // 重力（离地才生效）
+          if (!isOnGround) {
+            vy += gravity * dt;
+          }
+          // 空气阻力
+          const air = Math.max(0, 1 - airFriction * dt);
+          vx *= air;
+          if (!isOnGround) vy *= air;
+          // 地面静摩擦
+          if (isOnGround) {
+            const sign = Math.sign(vx);
+            const mag = Math.max(0, Math.abs(vx) - staticFriction * dt);
+            vx = sign * mag;
+          }
+          // 限速
+          vx = Math.max(-maxSpeedX, Math.min(maxSpeedX, vx));
+          vy = Math.max(-maxSpeedY, Math.min(maxSpeedY, vy));
+          // 积分位置
+          currentMovingSpine.x += vx * dt;
+          currentMovingSpine.y += vy * dt;
+          // 垂直边界/落地
+          const groundY = movingApp.screen.height;
+          if (currentMovingSpine.y >= groundY) {
+            if (!isOnGround && dropStartY != null) {
+              const droppedHeight = groundY - dropStartY;
+              if (droppedHeight >= droppedThreshold) {
+                // 这里可触发一次性落地动画
+                try { handleMouseClick && handleMouseClick(); } catch (_) {}
+              }
             }
-            
-            if (Math.random() < 0.003) {
-                startRandomPause();
+            currentMovingSpine.y = groundY;
+            vy = 0;
+            isOnGround = true;
+          } else if (currentMovingSpine.y < 0) {
+            currentMovingSpine.y = 0;
+            vy = 0;
+            isOnGround = false;
+          } else {
+            isOnGround = false;
+          }
+          // 水平边界 + 反弹
+          if (currentMovingSpine.x <= 0) {
+            currentMovingSpine.x = 0;
+            vx = -vx * resilience;
+          } else if (currentMovingSpine.x >= movingApp.screen.width) {
+            currentMovingSpine.x = movingApp.screen.width;
+            vx = -vx * resilience;
+          }
+          // 朝向
+          if (currentMovingSpine.skeleton) {
+            if (vx > 5) currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+            else if (vx < -5) currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+          }
+          // 几乎静止时可以保留随机暂停趣味
+          if (isOnGround && Math.abs(vx) < 5 && Math.abs(vy) < 5) {
+            if (!isMouseInteracting && !isPaused && Math.random() < 0.003) {
+              startRandomPause();
             }
+          }
         }
         
         function startRandomPause() {
