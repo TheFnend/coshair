@@ -8,6 +8,7 @@
   <!-- PIXI.js and Spine dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.2.2/dist/browser/pixi.js"
           integrity="sha256-AiXDYWt7rqC7JuOBLIvL2GuRGjjE1mvYepH56aycTPc=" crossorigin="anonymous"></script>
+  <!-- 模型描边使用内联 Outline Shader 实现，无需外部过滤器 -->
   <script src="naganeko.pages.dev/chibi-gif/js2/pixi-spine-3.8.umd_all-3.8@3.0.16.js"></script>
   
   <style>
@@ -42,10 +43,10 @@
     
     #spine-container {
       position: fixed;
-      bottom: 0px;
+      top: 0px;
       left: 0px;
       width: 100vw;
-      height: 300px;
+      height: 100vh;
       overflow: hidden;
       z-index: 1000;
     }
@@ -86,7 +87,7 @@
     <p>欢迎来到简单的Spine模型查看器！这是一个干净简洁的页面，右下角会显示来自model文件夹的Spine动画模型。</p>
   </div>
   
-  <div id="controls" style="margin-bottom: 10px; position: fixed; bottom: 310px; left: 20px; width: 300px; text-align: center;">
+  <div id="controls" style="margin-bottom: 10px; position: fixed; bottom: 20px; left: 20px; width: 300px; text-align: center; z-index: 1100;">
     <div style="margin-bottom: 8px;">
       <select id="model-select" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
           <option value="">选择模型...</option>
@@ -117,7 +118,7 @@
     // 创建PIXI应用
     const app = new PIXI.Application({
       width: window.innerWidth,
-      height: 300,
+      height: window.innerHeight,
       backgroundColor: 0x000000,
       backgroundAlpha: 0,
       antialias: true,
@@ -138,7 +139,51 @@
     let isPaused = false; // 是否正在暂停
     let originalAnimation = ''; // 原始移动动画名称
     let isMouseInteracting = false; // 是否正在鼠标交互
-    let mouseInteractAnimation = ''; // 鼠标交互时的动画
+    let mouseInteractAnimation = '';
+    // 拖拽/下落/高亮相关全局变量
+    let isDragging = false;
+    let isFalling = false;
+    let isOnGround = true;
+    let fallSpeed = 0;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let dragOutlineFilter = null;
+    
+    const gravity = 2200; // px/s^2，重力加速度（基于 dt 时间步长）
+    // 惯性物理参数与状态
+    let vx = 0, vy = 0; // 速度（px/s）
+    const airFriction = 2.0;       // 空气阻力（越大衰减越快）
+    const staticFriction = 900.0;  // 地面静摩擦（px/s^2 等效）
+    const resilience = 0.3;        // 水平弹性系数（0~1），撞墙后反弹比例
+    const droppedThreshold = 10.0;  // 触发“落地一次”的最小高度（px）
+    const maxSpeedX = 2500.0;       // 水平最大速度限制
+    const maxSpeedY = 3500.0;       // 垂直最大速度限制
+    let dropStartY = null;          // 记录离地或抛出时的起始高度
+    const pointerSamples = [];      // 拖拽采样用于释放瞬时速度计算
+
+    function pushPointerSample(x, y, tMs) {
+      // 仅保留最近 ~160ms 的样本
+      pointerSamples.push({ x, y, t: tMs });
+      const cutoff = tMs - 160;
+      while (pointerSamples.length && pointerSamples[0].t < cutoff) {
+        pointerSamples.shift();
+      }
+    }
+    function computeReleaseVelocity() {
+      const n = pointerSamples.length;
+      if (n < 2) return { vx: 0, vy: 0 };
+      const end = pointerSamples[n - 1];
+      // 找到与末端时间差至少 ~60ms 的较早样本，提高稳健性
+      let i = n - 2;
+      while (i >= 0 && (end.t - pointerSamples[i].t) < 60) i--;
+      i = Math.max(0, i);
+      const start = pointerSamples[i];
+      const dt = Math.max(1, end.t - start.t) / 1000; // s
+      return {
+        vx: (end.x - start.x) / dt,
+        vy: (end.y - start.y) / dt
+      };
+    }
     
     // 模型配置映射
     const modelConfigs = {
@@ -198,16 +243,24 @@
     function clearCurrentModel() {
       if (currentSpine) {
         stopMoving();
-        // 移除鼠标点击事件监听器
+        // 移除鼠标点击与拖拽事件监听器
         currentSpine.off('click', handleMouseClick);
+        currentSpine.off('pointerdown', startDrag);
         app.stage.removeChild(currentSpine);
         currentSpine.destroy();
         currentSpine = null;
       }
-      
-      // 重置交互状态
+      // 重置交互与拖拽/下落状态
       isMouseInteracting = false;
-      
+      isDragging = false;
+      isFalling = false;
+      isOnGround = true;
+      fallSpeed = 0;
+      // 清理拖拽高亮（移除描边滤镜）
+      if (currentSpine && currentSpine.filters) {
+        currentSpine.filters = currentSpine.filters.filter(f => f !== dragOutlineFilter);
+      }
+      dragOutlineFilter = null;
       // 清空动画选择器
       const animationSelect = document.getElementById('animation-select');
       animationSelect.innerHTML = '<option value="">选择动作...</option>';
@@ -266,111 +319,228 @@
     // 鼠标点击交互函数
     function handleMouseClick() {
       if (!currentSpine || isMouseInteracting) return;
-      
+      // 仅落地后允许触发交互
+      if (!isOnGround) return;
       // 不需要保存当前动画，始终恢复到move动画
-      
-      // 寻找interact动画
       const interactAnimations = currentSpine.state.data.skeletonData.animations.filter(anim => 
         anim.name.toLowerCase().includes('interact')
       );
-      
       if (interactAnimations.length > 0) {
         const interactAnim = interactAnimations[0];
-        currentSpine.state.setAnimation(0, interactAnim.name, false); // 播放一次，不循环
+        currentSpine.state.setAnimation(0, interactAnim.name, false);
         mouseInteractAnimation = interactAnim.name;
         console.log(`鼠标点击，播放动画: ${interactAnim.name}`);
-        
         isMouseInteracting = true;
-        // 停止随机暂停
         isPaused = false;
         pauseTimer = 0;
-        
-        // 设置动画完成后的回调
         currentSpine.state.addListener({
           complete: function(entry) {
             if (entry.animation.name === interactAnim.name && isMouseInteracting) {
-              // interact动画播放完成，恢复移动动画
               isMouseInteracting = false;
               if (originalAnimation && currentSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
                 currentSpine.state.setAnimation(0, originalAnimation, true);
                 console.log(`interact动画完成，恢复移动动画: ${originalAnimation}`);
               }
-              // 移除监听器
               currentSpine.state.clearListeners();
             }
           }
         });
       }
     }
-    
-    function moveModel() {
-      if (!currentSpine || !isMoving) return;
-      
-      // 如果正在鼠标交互中，停止移动
-      if (isMouseInteracting) {
-        return;
-      }
-      
-      // 如果正在暂停中（播放随机动画）
-      if (isPaused) {
-        return;
-      }
-      
-      // 移动模型
-      currentSpine.x += moveDirection * moveSpeed;
-      
-      // 检查边界并反转方向（使用整个网页宽度）
-      if (currentSpine.x <= 0) {
-        moveDirection = 1;
-        if (currentSpine.skeleton) {
-          currentSpine.skeleton.scaleX = Math.abs(currentSpine.skeleton.scaleX);
+    // 拖拽高亮绘制与移除（使用自定义 Outline Shader 实现模型描边）
+    const dragOutlineShaderFrag = `
+      precision mediump float;
+      varying vec2 vTextureCoord;
+      uniform sampler2D uSampler;
+      uniform vec2 pixelSize;    // 1.0 / screen size
+      uniform float thickness;   // 描边粗细
+      uniform vec4 outlineColor; // RGBA 颜色
+      void main(void) {
+        vec4 base = texture2D(uSampler, vTextureCoord);
+        float a = base.a;
+        float maxAlpha = 0.0;
+        // 采样邻域 8 个方向
+        for (int x = -1; x <= 1; x++) {
+          for (int y = -1; y <= 1; y++) {
+            if (x == 0 && y == 0) continue;
+            vec2 offset = vec2(float(x), float(y)) * pixelSize * thickness;
+            vec4 s = texture2D(uSampler, vTextureCoord + offset);
+            maxAlpha = max(maxAlpha, s.a);
+          }
         }
-      } else if (currentSpine.x >= window.innerWidth) {
-        moveDirection = -1;
-        if (currentSpine.skeleton) {
-          currentSpine.skeleton.scaleX = -Math.abs(currentSpine.skeleton.scaleX);
-        }
+        float outline = clamp(maxAlpha - a, 0.0, 1.0);
+        // 若当前像素本身不可见但邻域可见 -> 绘制描边色；否则保持原色
+        vec4 color = (a < 0.01 && outline > 0.0)
+          ? vec4(outlineColor.rgb, outlineColor.a * outline)
+          : base;
+        gl_FragColor = color;
       }
-      
-      // 随机暂停（每300帧大约有1%的概率暂停）
-      if (Math.random() < 0.003) {
-        startRandomPause();
+    `;
+    function ensureDragOutlineFilter() {
+      if (!dragOutlineFilter) {
+        dragOutlineFilter = new PIXI.Filter(undefined, dragOutlineShaderFrag, {
+          pixelSize: new Float32Array([1 / app.screen.width, 1 / app.screen.height]),
+          thickness: 20.0,
+          outlineColor: new Float32Array([1.0, 1.0, 0.0, 1.0]) // 更亮的黄色 #FFFF00
+         });
+      }
+      return dragOutlineFilter;
+    }
+    // 拖拽高亮绘制与移除（使用自定义 Outline Shader 实现模型描边）
+    function updateDragHighlight() {
+      if (!currentSpine) return;
+      const filter = ensureDragOutlineFilter();
+      const filters = currentSpine.filters || [];
+      if (!filters.includes(filter)) {
+        currentSpine.filters = [...filters, filter];
       }
     }
+     function removeDragHighlight() {
+       if (!currentSpine) return;
+       if (currentSpine.filters && currentSpine.filters.length) {
+         currentSpine.filters = currentSpine.filters.filter(f => f !== dragOutlineFilter);
+       }
+     }
+    // 开始拖拽
+    function startDrag(event) {
+      if (!currentSpine) return;
+      isDragging = true;
+      isOnGround = false;
+      isFalling = false;
+      fallSpeed = 0;
+      // 拖拽开始时清零物理速度并记录起始高度
+      vx = 0; vy = 0;
+      dropStartY = currentSpine ? currentSpine.y : null;
+      // 初始化采样
+      pointerSamples.length = 0;
+      const pos = event.data.getLocalPosition(app.stage);
+      dragOffsetX = pos.x - currentSpine.x;
+      dragOffsetY = pos.y - currentSpine.y;
+      pushPointerSample(pos.x, pos.y, (self.performance ? performance.now() : Date.now()));
+      updateDragHighlight();
+    }
+    // 拖拽移动
+    function onDragMove(event) {
+      if (!isDragging || !currentSpine) return;
+      const pos = event.data.getLocalPosition(app.stage);
+      currentSpine.x = pos.x - dragOffsetX;
+      currentSpine.y = pos.y - dragOffsetY;
+      pushPointerSample(pos.x, pos.y, (self.performance ? performance.now() : Date.now()));
+      updateDragHighlight();
+    }
+    // 结束拖拽 -> 开始下落
+    function endDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      removeDragHighlight();
+      isFalling = true;
+      fallSpeed = 0;
+      // 根据最近拖拽采样，计算释放瞬时速度作为初速度
+      const v = computeReleaseVelocity();
+      vx = v.vx;
+      vy = v.vy;
+      // 离地自由运动（若向上抛则 vy 为负，向下为正）
+      isOnGround = false;
+      isFalling = false;
+      fallSpeed = 0;
+      // 记录抛出开始高度用于“落地一次”阈值判断
+      dropStartY = currentSpine ? currentSpine.y : null;
+    }
+        function moveModel() {
+          if (!currentSpine || !isMoving) return;
+          // 拖拽中不进行物理更新
+          if (isDragging) return;
     
+          const dt = app.ticker && typeof app.ticker.deltaMS === 'number' ? (app.ticker.deltaMS / 1000) : (1 / 60);
+    
+          // 受力：重力（离地才生效）
+          if (!isOnGround) {
+            vy += gravity * dt;
+          }
+    
+          // 空气阻力：对速度做指数式衰减（简单线性近似）
+          const air = Math.max(0, 1 - airFriction * dt);
+          vx *= air;
+          if (!isOnGround) vy *= air;
+    
+          // 地面静摩擦：落地后让水平速度逐渐衰减至 0
+          if (isOnGround) {
+            const sign = Math.sign(vx);
+            const mag = Math.max(0, Math.abs(vx) - staticFriction * dt);
+            vx = sign * mag;
+          }
+    
+          // 限速
+          vx = Math.max(-maxSpeedX, Math.min(maxSpeedX, vx));
+          vy = Math.max(-maxSpeedY, Math.min(maxSpeedY, vy));
+    
+          // 位置积分
+          currentSpine.x += vx * dt;
+          currentSpine.y += vy * dt;
+    
+          // 垂直边界（顶部与地面）
+          const groundY = app.screen.height;
+          if (currentSpine.y >= groundY) {
+            // 触地：检查"落地一次"阈值
+            if (!isOnGround && dropStartY != null) {
+              const droppedHeight = groundY - dropStartY;
+              if (droppedHeight >= droppedThreshold) {
+                // 可在此触发一次性落地事件或动画
+               // console.log('Dropped once, height =', droppedHeight);
+              }
+            }
+            currentSpine.y = groundY;
+            vy = 0;
+            isOnGround = true;
+          } else if (currentSpine.y < 0) {
+            currentSpine.y = 0;
+            vy = 0;
+            isOnGround = false;
+          } else {
+            isOnGround = false;
+          }
+    
+          // 水平边界 + 弹性反弹
+          if (currentSpine.x <= 0) {
+            currentSpine.x = 0;
+            vx = -vx * resilience;
+          } else if (currentSpine.x >= app.screen.width) {
+            currentSpine.x = app.screen.width;
+            vx = -vx * resilience;
+          }
+    
+          // 根据速度朝向翻转朝向
+          if (currentSpine.skeleton) {
+            if (vx > 5) currentSpine.skeleton.scaleX = Math.abs(currentSpine.skeleton.scaleX);
+            else if (vx < -5) currentSpine.skeleton.scaleX = -Math.abs(currentSpine.skeleton.scaleX);
+          }
+    
+          // 几乎静止时（落地），保留现有"随机暂停"趣味
+          if (isOnGround && Math.abs(vx) < 5 && Math.abs(vy) < 5) {
+            if (!isMouseInteracting && !isPaused && Math.random() < 0.003) {
+              startRandomPause();
+            }
+          }
+        }
     // 加载Spine模型
     async function loadSpineModel(modelName) {
       if (!modelName || !modelConfigs[modelName]) {
         console.error('无效的模型名称:', modelName);
         return;
       }
-      
       try {
         updateModelInfo(modelName, '正在加载...');
-        
-        // 清理之前的模型
         clearCurrentModel();
-        
-        // 显示加载文本
         if (loadingText) {
           loadingText.style.display = 'block';
           loadingText.textContent = '正在加载模型...';
         }
-        
-        // 确保canvas已添加到容器
         if (!container.contains(app.view)) {
           container.appendChild(app.view);
         }
-        
         const config = modelConfigs[modelName];
-        
-        // 创建新的加载器实例
         const loader = new PIXI.Loader();
-        
-        // 对skel路径进行分段编码，避免如#等特殊字符的问题
         const encodedSkelUrl = encodePathSegments(config.skelFile);
-        
-        // 自定义imageLoader，确保atlas中的png文件名也会被正确编码
         const customImageLoaderFactory = function(ldr, namePrefix, baseUrl, imageOptions) {
           if (baseUrl && baseUrl.lastIndexOf('/') !== (baseUrl.length - 1)) {
             baseUrl += '/';
@@ -403,63 +573,38 @@
             }
           }
         };
-        
-        // 添加Spine资源到加载器，并传入自定义imageLoader
         loader.add(modelName, encodedSkelUrl, {
           metadata: {
             imageLoader: customImageLoaderFactory
           }
         });
-        
         loader.load((loader, resources) => {
           try {
             if (!resources[modelName] || !resources[modelName].spineData) {
               throw new Error('Spine数据加载失败');
             }
-            
-            // 隐藏加载文本
-            if (loadingText) {
-              loadingText.style.display = 'none';
-            }
-            
-            // 创建Spine对象
+            if (loadingText) loadingText.style.display = 'none';
             currentSpine = new PIXI.spine.Spine(resources[modelName].spineData);
-            
-            // 先设置初始位置
             currentSpine.x = app.screen.width / 2;
             currentSpine.y = app.screen.height / 2;
-            
-            // 计算合适的缩放比例
             const bounds = currentSpine.getBounds();
-            const scaleX = (app.screen.width * 0.8) / bounds.width;
-            const scaleY = (app.screen.height * 0.8) / bounds.height;
-            const baseScale = Math.min(scaleX, scaleY);
-            // 只对数字开头且带#的模型进行放大
-            const isNumberStartWithHash = config && config.name && /^\d.*#/.test(config.name);
-            const allowUpscale = (config && config.allowUpscale) || isNumberStartWithHash;
-            // 对符合条件的模型额外放大4倍
-             const scale = allowUpscale ? Math.min(baseScale * 4, 5) : Math.min(baseScale, 1);
-             
+            const scaleX = (app.screen.width * 0.3) / bounds.width;
+            const scaleY = (app.screen.height * 0.3) / bounds.height;
+             const baseScale = Math.min(scaleX, scaleY);
+             const isNumberStartWithHash = config && config.name && /^\d.*#/.test(config.name);
+             const allowUpscale = (config && config.allowUpscale) || isNumberStartWithHash;
+             const scale = allowUpscale ? Math.min(baseScale, 1.5) : Math.min(baseScale, 1);
              currentSpine.scale.set(scale);
-             
-             // 缩放后重新调整位置：水平居中，底部精确贴合网页底端
-             currentSpine.x = app.screen.width / 2;
-             currentSpine.y = app.screen.height;
-            
-            // 添加到舞台
+            currentSpine.x = app.screen.width / 2;
+            currentSpine.y = app.screen.height; // 初始就落地
             app.stage.addChild(currentSpine);
-            
-            // 设置模型为可交互
             currentSpine.interactive = true;
             currentSpine.buttonMode = true;
-            
-            // 添加鼠标点击事件监听器
             currentSpine.on('click', handleMouseClick);
-            
-            // 填充动画选择下拉菜单
+            currentSpine.on('pointerdown', startDrag);
+            isOnGround = true;
             const animationSelect = document.getElementById('animation-select');
             animationSelect.innerHTML = '<option value="">选择动作...</option>';
-            
             if (currentSpine.state.data.skeletonData.animations.length > 0) {
               currentSpine.state.data.skeletonData.animations.forEach(animation => {
                 const option = document.createElement('option');
@@ -467,29 +612,21 @@
                 option.textContent = animation.name;
                 animationSelect.appendChild(option);
               });
-              
-              // 优先播放move动画，如果没有则播放第一个动画
-            let defaultAnimation = currentSpine.state.data.skeletonData.animations.find(anim => 
-              anim.name.toLowerCase().includes('move') || anim.name.toLowerCase().includes('walk')
-            );
-            if (!defaultAnimation) {
-              defaultAnimation = currentSpine.state.data.skeletonData.animations[0];
-            }
-            
-            currentSpine.state.setAnimation(0, defaultAnimation.name, true);
-            animationSelect.value = defaultAnimation.name;
-            // 保存move动画作为默认移动动画
-            originalAnimation = defaultAnimation.name;
-            isPlaying = true;
-              
-              // 启动移动
+              let defaultAnimation = currentSpine.state.data.skeletonData.animations.find(anim => 
+                anim.name.toLowerCase().includes('move') || anim.name.toLowerCase().includes('walk')
+              );
+              if (!defaultAnimation) {
+                defaultAnimation = currentSpine.state.data.skeletonData.animations[0];
+              }
+              currentSpine.state.setAnimation(0, defaultAnimation.name, true);
+              animationSelect.value = defaultAnimation.name;
+              originalAnimation = defaultAnimation.name;
+              isPlaying = true;
               isMoving = true;
               startMoving();
             }
-            
             updateModelInfo(modelName, '加载成功');
             console.log('Spine模型加载成功！');
-            console.log('可用动画:', currentSpine.state.data.skeletonData.animations.map(anim => anim.name));
           } catch (e) {
             console.error('创建Spine对象时出错:', e);
             updateModelInfo(modelName, '加载失败');
@@ -553,13 +690,34 @@
     window.addEventListener('load', () => {
       // 添加canvas到容器
       container.appendChild(app.view);
-      
+
       // 初始化事件监听器
       initializeEventListeners();
-      
+
+      // 全局舞台拖拽事件
+      app.stage.interactive = true;
+      app.stage.on('pointermove', onDragMove);
+      app.stage.on('pointerup', endDrag);
+      app.stage.on('pointerupoutside', endDrag);
+
+      // 自适应窗口尺寸
+      window.addEventListener('resize', () => {
+        app.renderer.resize(window.innerWidth, window.innerHeight);
+        // 保持落地与边界
+        if (currentSpine) {
+          if (isOnGround) currentSpine.y = app.screen.height;
+          // 限制到新宽度范围内
+          currentSpine.x = Math.max(0, Math.min(app.screen.width, currentSpine.x));
+        }
+        // 更新描边像素尺寸
+        if (dragOutlineFilter) {
+          dragOutlineFilter.uniforms.pixelSize = new Float32Array([1 / app.screen.width, 1 / app.screen.height]);
+        }
+      });
+
       // 初始化模型信息
       updateModelInfo(null, '等待选择');
-      
+
       console.log('Spine模型查看器初始化完成');
     });
     
