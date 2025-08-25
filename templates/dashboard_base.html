@@ -1414,6 +1414,14 @@
                 const pet = hitTestPets(e.clientX, e.clientY);
                 if (!pet) return;
                 const { x, y } = toStageXY(e);
+                const now = self.performance ? performance.now() : Date.now();
+                
+                // 记录单击检测所需的信息
+                pet.clickStartTime = now;
+                pet.clickStartX = x;
+                pet.clickStartY = y;
+                pet.hasMoved = false;
+                
                 pet.isDragging = true;
                 pet.isMouseInteracting = true; // 暂停自动行为
                 pet.vx = 0; pet.vy = 0; // 清零速度
@@ -1421,7 +1429,7 @@
                 pet.dragOffsetY = pet.spine.y - y;
                 pet.dropStartY = pet.spine.y;
                 pet.pointerSamples = [];
-                pushPointerSample(pet, x, y, (self.performance ? performance.now() : Date.now()));
+                pushPointerSample(pet, x, y, now);
                 dragState = { pet, pointerId: e.pointerId };
                 drawHighlight(pet);
                 e.stopPropagation();
@@ -1431,6 +1439,17 @@
                 if (!dragState.pet || (e.pointerId !== dragState.pointerId)) return;
                 const pet = dragState.pet;
                 const { x, y } = toStageXY(e);
+                
+                // 检测是否有明显移动（用于区分单击和拖拽）
+                if (!pet.hasMoved && pet.clickStartX !== undefined && pet.clickStartY !== undefined) {
+                    const moveDistance = Math.sqrt(
+                        Math.pow(x - pet.clickStartX, 2) + Math.pow(y - pet.clickStartY, 2)
+                    );
+                    if (moveDistance > 5) { // 移动超过5像素认为是拖拽
+                        pet.hasMoved = true;
+                    }
+                }
+                
                 pet.spine.x = Math.max(0, Math.min(movingApp.screen.width, x + pet.dragOffsetX));
                 pet.spine.y = Math.max(0, y + pet.dragOffsetY);
                 pushPointerSample(pet, x, y, (self.performance ? performance.now() : Date.now()));
@@ -1441,13 +1460,34 @@
             function onPointerUp(e){
                 if (!dragState.pet || (dragState.pointerId !== null && e.pointerId !== dragState.pointerId)) return;
                 const pet = dragState.pet;
+                
+                // 检测是否为单击（时间短且移动距离小）
+                const now = self.performance ? performance.now() : Date.now();
+                const clickDuration = now - (pet.clickStartTime || 0);
+                const isClick = !pet.hasMoved && clickDuration < 300; // 300ms内且无明显移动认为是单击
+                
                 removeHighlight(pet);
                 pet.isDragging = false;
-                pet.isMouseInteracting = false; // 释放后允许自由运动
-                const v = computeReleaseVelocity(pet);
-                pet.vx = v.vx; pet.vy = v.vy;
-                pet.dropStartY = pet.spine ? pet.spine.y : null;
-                pet.isOnGround = false;
+                
+                if (isClick) {
+                    // 单击触发interact动作
+                    pet.isMouseInteracting = false; // 重置状态以允许interact
+                    handleMouseClick(pet);
+                } else {
+                    // 拖拽释放，应用惯性
+                    pet.isMouseInteracting = false; // 释放后允许自由运动
+                    const v = computeReleaseVelocity(pet);
+                    pet.vx = v.vx; pet.vy = v.vy;
+                    pet.dropStartY = pet.spine ? pet.spine.y : null;
+                    pet.isOnGround = false;
+                }
+                
+                // 清理单击检测相关属性
+                pet.clickStartTime = undefined;
+                pet.clickStartX = undefined;
+                pet.clickStartY = undefined;
+                pet.hasMoved = false;
+                
                 dragState = { pet: null, pointerId: null };
                 e.stopPropagation();
                 e.preventDefault();
