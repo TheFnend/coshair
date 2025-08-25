@@ -707,6 +707,9 @@
                 this.isOnGround = true;
                 this.dropStartY = null;
                 this.pointerSamples = [];
+                // 睡觉图标
+                this.sleepBubble = null;
+                this.isSleeping = false;
             }
             
             // 清理宠物资源
@@ -718,6 +721,9 @@
                     this.spine.off('click');
                     if (this.highlightGfx && movingApp && movingApp.stage) {
                         try { movingApp.stage.removeChild(this.highlightGfx); } catch(_) {}
+                    }
+                    if (this.sleepBubble && movingApp && movingApp.stage) {
+                        try { movingApp.stage.removeChild(this.sleepBubble); } catch(_) {}
                     }
                     if (this.spine.destroy) {
                         this.spine.destroy();
@@ -1095,12 +1101,18 @@
                         return name.includes('relax') || name.includes('idle');
                     });
                     pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
                 case 'sleep':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('sleep')
                     );
                     pet.isInMoveAction = false;
+                    // 睡觉时统一朝右，确保睡觉图标方向一致
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                    }
+                    showSleepBubble(pet); // 显示睡觉图标
                     break;
                 case 'move_left':
                     targetAnimation = animations.find(anim => {
@@ -1112,6 +1124,7 @@
                     if (pet.spine.skeleton) {
                         pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
                     }
+                    hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
                 case 'move_right':
                     targetAnimation = animations.find(anim => {
@@ -1123,18 +1136,21 @@
                     if (pet.spine.skeleton) {
                         pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
                     }
+                    hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
                 case 'special':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('special')
                     );
                     pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
                 case 'interact':
                     targetAnimation = animations.find(anim => 
                         anim.name.toLowerCase().includes('interact')
                     );
                     pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
             }
             
@@ -1249,6 +1265,13 @@
             // 碰撞与重叠分离（根据设置决定是否执行）
             if (collisionEnabled) {
                 separateOverlappingPets();
+            }
+            
+            // 更新睡觉图标位置
+            for (const pet of movingPets) {
+                if (pet && pet.isSleeping && pet.sleepBubble && pet.spine) {
+                    updateSleepBubblePosition(pet);
+                }
             }
         }
 
@@ -1547,6 +1570,99 @@
                         }
                     }
                 });
+            }
+        }
+        
+        // 睡觉图标管理函数
+        function showSleepBubble(pet) {
+            if (!pet || !pet.spine || !movingApp || !movingApp.stage) return;
+            
+            try {
+                // 如果已经有睡觉图标，先移除
+                hideSleepBubble(pet);
+                
+                // 创建睡觉图标
+                const texture = PIXI.Texture.from('/static/sleep-bubble.svg');
+                if (!texture || !texture.valid) {
+                    console.warn('Sleep bubble texture not loaded');
+                    return;
+                }
+                
+                pet.sleepBubble = new PIXI.Sprite(texture);
+                if (!pet.sleepBubble) return;
+                
+                // 确保对象完全初始化
+                pet.sleepBubble.anchor.set(0.5, 1); // 底部中心锚点
+                pet.sleepBubble.scale.set(0.8); // 缩放到合适大小
+                pet.sleepBubble.visible = true; // 确保visible属性存在
+                
+                // 设置位置（宠物上方）
+                updateSleepBubblePosition(pet);
+                
+                // 安全地添加到舞台
+                if (movingApp.stage && pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                    movingApp.stage.addChild(pet.sleepBubble);
+                    pet.isSleeping = true;
+                }
+            } catch (error) {
+                console.error('Error creating sleep bubble:', error);
+                hideSleepBubble(pet);
+            }
+            
+            // 添加轻微的浮动动画
+            pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
+        }
+        
+        function hideSleepBubble(pet) {
+            if (!pet) return;
+            
+            if (pet.sleepBubble) {
+                try {
+                    // 确保对象仍然有效
+                    if (pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                        // 从舞台移除
+                        if (movingApp && movingApp.stage && movingApp.stage.children.includes(pet.sleepBubble)) {
+                            movingApp.stage.removeChild(pet.sleepBubble);
+                        }
+                        // 销毁PIXI对象
+                        if (pet.sleepBubble.destroy && typeof pet.sleepBubble.destroy === 'function') {
+                            pet.sleepBubble.destroy({ children: true, texture: false, baseTexture: false });
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Error removing sleep bubble:', error);
+                }
+                pet.sleepBubble = null;
+            }
+            pet.isSleeping = false;
+        }
+        
+        function updateSleepBubblePosition(pet) {
+            if (!pet || !pet.sleepBubble || !pet.spine) return;
+            
+            try {
+                // 再次检查sleepBubble是否仍然存在（防止异步销毁）
+                if (!pet.sleepBubble || pet.sleepBubble.destroyed) return;
+                
+                // 获取宠物边界
+                const bounds = pet.spine.getBounds();
+                if (!bounds) return; // 防止bounds为null
+                
+                // 安全地设置位置
+                if (pet.sleepBubble && typeof pet.spine.x === 'number') {
+                    pet.sleepBubble.x = pet.spine.x;
+                    pet.sleepBubble.y = bounds.y + 5; // 宠物上方10像素
+                    
+                    // 添加轻微的浮动效果
+                    if (pet.sleepBubble.animationOffset !== undefined) {
+                        const time = Date.now() * 0.002;
+                        pet.sleepBubble.y += Math.sin(time + pet.sleepBubble.animationOffset) * 3;
+                    }
+                }
+            } catch (error) {
+                // 如果出现错误，清理睡觉图标
+                console.warn('Sleep bubble position update failed:', error);
+                hideSleepBubble(pet);
             }
         }
         
