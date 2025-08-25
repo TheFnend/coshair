@@ -1252,9 +1252,21 @@
                 }
                 // 水平边界 + 反弹
                 if (pet.spine.x <= 0) {
-                    pet.spine.x = 0; pet.vx = -pet.vx * RESILIENCE;
+                    pet.spine.x = 0; 
+                    pet.vx = Math.abs(pet.vx) * RESILIENCE; // 确保向右的速度
+                    pet.moveDirection = 1; // 向右移动
+                    // 如果速度太小，给一个最小推力
+                    if (Math.abs(pet.vx) < 100) {
+                        pet.vx = 100;
+                    }
                 } else if (pet.spine.x >= movingApp.screen.width) {
-                    pet.spine.x = movingApp.screen.width; pet.vx = -pet.vx * RESILIENCE;
+                    pet.spine.x = movingApp.screen.width; 
+                    pet.vx = -Math.abs(pet.vx) * RESILIENCE; // 确保向左的速度
+                    pet.moveDirection = -1; // 向左移动
+                    // 如果速度太小，给一个最小推力
+                    if (Math.abs(pet.vx) < 100) {
+                        pet.vx = -100;
+                    }
                 }
                 // 根据速度翻转朝向
                 if (pet.spine.skeleton) {
