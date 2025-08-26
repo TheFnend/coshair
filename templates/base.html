@@ -16,7 +16,7 @@
     <title>{% block title %}07妙妙屋{% endblock %}</title>
     
     <!-- 自定义图标字体 -->
-    <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet" >
+    <link href="{{ url_for('static', filename='iconfont.css') }}" rel="stylesheet">
     
     <!-- Bootstrap CSS框架 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -33,11 +33,13 @@
     <!-- 网站图标 -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='头像_耀骑士临光.png') }}">
     <style>
+        /* 全局重置，移除默认的页面外边距，避免顶部空白 */
+        html, body { margin: 0; padding: 0; }
         /* ==================== 表格样式 ==================== */
         
         /* 表格行背景色 - 斑马线形式 */
         .table tbody tr {
-            /* background-color: white !important;  默认白色背景 */
+            /* background-color: white !important;  */
         }
 
         /* ==================== 图标字体样式 ==================== */
@@ -825,7 +827,679 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- 固定位置的宠物容器 -->
+    <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+    
+    <!-- 底部移动宠物容器 -->
+    <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; bottom:0px; left:0px; width:100vw; height:300px; z-index: 1000; pointer-events:none; display:none;">
+        <canvas id="spine-moving-canvas" style="width:100%; height:100%; pointer-events:auto;"></canvas>
+        <div id="spine-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px; display:none;">正在加载模型...</div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
+    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
+    <script>
+    // 全局函数：处理包含#的URL，进行编码以防止被截断
+    window.safeUrl = function(url) {
+        if (typeof url === 'string' && url.includes('#')) {
+            return url.replace(/#/g, '%23');
+        }
+        return url;
+    };
+
+    (function(){
+        // Patch: 自动对 /arkmodels/ 下的图片 URL 中的 # 进行编码，防止被当作片段截断
+        try {
+            if (!window.__spineImgSrcPatched) {
+                const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+                if (desc && desc.set && desc.get) {
+                    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                        configurable: true,
+                        enumerable: true,
+                        get: function(){ return desc.get.call(this); },
+                        set: function(val){
+                            try {
+                                if (typeof val === 'string' && val.includes('#') && (val.indexOf('/arkmodels/') !== -1)) {
+                                    val = val.replace(/#/g, '%23');
+                                }
+                            } catch (e) {}
+                            return desc.set.call(this, val);
+                        }
+                    });
+                    window.__spineImgSrcPatched = true;
+                }
+            }
+        } catch (e) { /* 忽略补丁失败 */ }
+
+        const containerId = 'spine-pet';
+        const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
+        const scale = isMobile ? 0.8 : 1;
+        const playerWidth = isMobile ? 180 : 220;
+        const playerHeight = isMobile ? 220 : 260;
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.style.width = playerWidth + 'px';
+        container.style.height = playerHeight + 'px';
+
+        function initPlayer(skelUrl, atlasUrl){
+            try {
+                const player = new spine.SpinePlayer(containerId, {
+                    skelUrl: skelUrl,
+                    atlasUrl: atlasUrl,
+                    showControls: false,
+                    backgroundColor: '#00000000',
+                    alpha: true,
+                    preserveDrawingBuffer: false,
+                    premultipliedAlpha: true,
+                    scale,
+                    success: (p) => {
+                        const prefer = ['idle', 'Idle', 'stand', 'Stand', 'breath', 'idle_1'];
+                        const all = p.animationState.data.skeletonData.animations.map(a=>a.name);
+                        let chosen = all.find(a=>prefer.includes(a)) || all[0];
+                        p.setAnimation(chosen, true);
+
+                        // 清理旧的点击处理器，避免重复绑定
+                        if (window._spinePetClickHandler) {
+                            container.removeEventListener('click', window._spinePetClickHandler);
+                        }
+                        const handler = ()=>{
+                            const idx = all.indexOf(chosen);
+                            const next = all[(idx + 1) % all.length];
+                            chosen = next;
+                            p.setAnimation(next, true);
+                        };
+                        container.addEventListener('click', handler);
+                        window._spinePetClickHandler = handler;
+                    }
+                });
+                window._spinePetPlayer = player;
+            } catch(e) {
+                console.error('Spine player init failed', e);
+            }
+        }
+
+        // 暴露到全局：根据给定URL刷新宠物
+        window.refreshSpinePet = function(newSkelUrl, newAtlasUrl){
+            if (!newSkelUrl || !newAtlasUrl) return;
+            // 先清空容器DOM，然后重新初始化
+            container.innerHTML = '';
+            initPlayer(newSkelUrl, newAtlasUrl);
+        };
+        // 暴露到全局：从后端当前选择获取并刷新
+        window.refreshSpinePetFromServer = async function(){
+            try {
+                const res = await fetch('/api/spine_model/current');
+                const data = await res.json();
+                if (data && data.success && data.skel_path && data.atlas_path) {
+                    window.refreshSpinePet(data.skel_path, data.atlas_path);
+                }
+            } catch (e) {
+                console.error('刷新宠物失败', e);
+            }
+        };
+
+        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+        initPlayer(skelUrl, atlasUrl);
+    })();
+    
+    // ==================== 移动宠物功能 ====================
+    (function() {
+        // 检查是否支持PIXI.js
+        if (typeof PIXI === 'undefined') {
+            console.log('PIXI.js not loaded, loading from CDN...');
+            const pixiScript = document.createElement('script');
+            pixiScript.src = 'https://cdn.jsdelivr.net/npm/pixi.js@6.2.2/dist/browser/pixi.js';
+            pixiScript.onload = function() {
+                const spineScript = document.createElement('script');
+                // 尝试多个CDN源
+                const spineCDNs = [
+                    'https://cdn.jsdelivr.net/npm/pixi-spine@3.0.16/dist/pixi-spine.umd.js',
+                    'https://unpkg.com/pixi-spine@3.0.16/dist/pixi-spine.umd.js',
+                    'https://naganeko.pages.dev/chibi-gif/js2/pixi-spine-3.8.umd_all-3.8@3.0.16.js'
+                ];
+                
+                let cdnIndex = 0;
+                function tryLoadSpine() {
+                    if (cdnIndex >= spineCDNs.length) {
+                        console.error('所有PIXI Spine CDN都加载失败');
+                        return;
+                    }
+                    
+                    spineScript.src = spineCDNs[cdnIndex];
+                    spineScript.onload = initMovingPet;
+                    spineScript.onerror = function() {
+                        console.warn(`PIXI Spine CDN ${spineCDNs[cdnIndex]} 加载失败，尝试下一个...`);
+                        cdnIndex++;
+                        tryLoadSpine();
+                    };
+                    document.head.appendChild(spineScript);
+                }
+                
+                tryLoadSpine();
+            };
+            document.head.appendChild(pixiScript);
+        } else {
+            initMovingPet();
+        }
+        
+        let movingApp = null;
+        let currentMovingSpine = null;
+        let isMoving = false;
+        let moveDirection = 1;
+        let moveSpeed = 1;
+        let isPaused = false;
+        let isMouseInteracting = false;
+        let originalAnimation = '';
+        // 新增：拖拽/下落状态
+        let isDragging = false;
+        let isFalling = false;
+        let velocityY = 0;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let highlightGfx = null;
+        // 新增：惯性物理状态与常量
+        const gravity = 2200; // px/s^2
+        const airFriction = 2.0;       // 空气阻力（越大衰减越快）
+        const staticFriction = 900.0;  // 地面静摩擦（px/s^2 等效）
+        const resilience = 0.3;        // 水平弹性（0~1）
+        const droppedThreshold = 10.0; // 触发“落地一次”的最小高度（px）
+        const maxSpeedX = 2500.0;      // 水平最大速度
+        const maxSpeedY = 3500.0;      // 垂直最大速度
+        let vx = 0, vy = 0;            // 当前速度
+        let isOnGround = true;         // 是否在地面
+        let dropStartY = null;         // 记录离地时高度
+        const pointerSamples = [];     // 拖拽采样用于释放瞬时速度计算
+        function pushPointerSample(x, y, tMs) {
+          pointerSamples.push({ x, y, t: tMs });
+          const cutoff = tMs - 160; // 仅保留最近约160ms
+          while (pointerSamples.length && pointerSamples[0].t < cutoff) {
+            pointerSamples.shift();
+          }
+        }
+        function computeReleaseVelocity() {
+          const n = pointerSamples.length;
+          if (n < 2) return { vx: 0, vy: 0 };
+          const end = pointerSamples[n - 1];
+          let i = n - 2;
+          while (i >= 0 && (end.t - pointerSamples[i].t) < 60) i--;
+          i = Math.max(0, i);
+          const start = pointerSamples[i];
+          const dt = Math.max(1, end.t - start.t) / 1000; // s
+          return { vx: (end.x - start.x) / dt, vy: (end.y - start.y) / dt };
+        }
+        function initMovingPet() {
+            if (typeof PIXI === 'undefined' || typeof PIXI.spine === 'undefined') {
+                console.error('PIXI.js or PIXI.spine not available');
+                return;
+            }
+            
+            const canvas = document.getElementById('spine-moving-canvas');
+            const container = document.getElementById('spine-moving-pet');
+            
+            if (!canvas || !container) return;
+            
+            // 创建PIXI应用
+            movingApp = new PIXI.Application({
+                view: canvas,
+                width: window.innerWidth,
+                height: 300,
+                backgroundColor: 0x000000,
+                backgroundAlpha: 0,
+                antialias: true,
+                resolution: window.devicePixelRatio || 1,
+                autoDensity: true
+            });
+            // 确保画布不拦截鼠标事件（使用全局代理来处理拖拽）
+            if (movingApp && movingApp.view) {
+                try { movingApp.view.style.pointerEvents = 'none'; } catch(_) {}
+            }
+            
+            // 窗口大小改变时调整canvas
+            window.addEventListener('resize', () => {
+                if (movingApp) {
+                    movingApp.renderer.resize(window.innerWidth, 300);
+                }
+            });
+        }
+        
+        function loadMovingSpineModel(skelUrl, atlasUrl) {
+            if (!movingApp || !skelUrl || !atlasUrl) return;
+            
+            const loadingDiv = document.getElementById('spine-loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.textContent = '正在加载移动模型...';
+            }
+            
+            // 清理当前模型
+            if (currentMovingSpine) {
+                stopMoving();
+                movingApp.stage.removeChild(currentMovingSpine);
+                currentMovingSpine.destroy();
+                currentMovingSpine = null;
+            }
+            
+            // 使用原始URL，不进行额外编码（因为skelUrl已经在后端正确编码过了）
+             const encodedSkelUrl = skelUrl;
+            
+            // 创建加载器
+            const loader = new PIXI.Loader();
+            
+            // 自定义图片加载器
+            const customImageLoaderFactory = function(ldr, namePrefix, baseUrl, imageOptions) {
+                if (baseUrl && baseUrl.lastIndexOf('/') !== (baseUrl.length - 1)) {
+                    baseUrl += '/';
+                }
+                return function(line, callback) {
+                     const name = namePrefix + line;
+                     // 不对line进行额外编码，因为atlas文件中的路径已经是正确的
+                     const url = baseUrl + line;
+                    const cachedResource = ldr.resources[name];
+                    if (cachedResource) {
+                        const done = () => {
+                            callback(cachedResource.texture.baseTexture);
+                        };
+                        if (cachedResource.texture) {
+                            done();
+                        } else {
+                            cachedResource.onAfterMiddleware.add(done);
+                        }
+                    } else {
+                        ldr.add(name, url, imageOptions, (resource) => {
+                            if (!resource.error) {
+                                if (line.indexOf('-pma.') >= 0 && PIXI.ALPHA_MODES && resource.texture && resource.texture.baseTexture) {
+                                    resource.texture.baseTexture.alphaMode = PIXI.ALPHA_MODES.PMA;
+                                }
+                                callback(resource.texture.baseTexture);
+                            } else {
+                                callback(null);
+                            }
+                        });
+                    }
+                }
+            };
+            
+            // 直接使用skel URL，但确保atlas也能正确加载
+             loader.add('movingSpine', encodedSkelUrl, {
+                 metadata: {
+                     imageLoader: customImageLoaderFactory
+                 }
+             });
+             
+             // 预加载atlas文件
+             loader.add('movingAtlas', atlasUrl, {
+                 metadata: {
+                     imageLoader: customImageLoaderFactory
+                 }
+             });
+            
+            loader.load((loader, resources) => {
+                try {
+                    if (!resources.movingSpine || !resources.movingSpine.spineData) {
+                        throw new Error('Spine数据加载失败');
+                    }
+                    
+                    if (loadingDiv) loadingDiv.style.display = 'none';
+                    
+                    // 创建Spine对象
+                    currentMovingSpine = new PIXI.spine.Spine(resources.movingSpine.spineData);
+                    
+                    // 设置初始位置和缩放
+                    currentMovingSpine.x = movingApp.screen.width / 2;
+                    currentMovingSpine.y = movingApp.screen.height;
+                    
+                    const bounds = currentMovingSpine.getBounds();
+                    const scaleX = (movingApp.screen.width * 0.8) / bounds.width;
+                    const scaleY = (movingApp.screen.height * 0.8) / bounds.height;
+                    const baseScale = Math.min(scaleX, scaleY);
+                    const scale = Math.min(baseScale * 2, 3);
+                    currentMovingSpine.scale.set(scale);
+                    
+                    // 重新调整位置
+                    currentMovingSpine.x = movingApp.screen.width / 2;
+                    currentMovingSpine.y = movingApp.screen.height;
+                    
+                    // 添加到舞台
+                    movingApp.stage.addChild(currentMovingSpine);
+                    
+                    // 设置交互
+                    currentMovingSpine.interactive = true;
+                    currentMovingSpine.buttonMode = true;
+                    // 改为拖拽触发交互（落地后），不再点击触发
+                    currentMovingSpine.cursor = 'grab';
+                    
+                    // 寻找合适的移动动画
+                    const animations = currentMovingSpine.state.data.skeletonData.animations;
+                    let defaultAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('move') || 
+                        anim.name.toLowerCase().includes('walk') ||
+                        anim.name.toLowerCase().includes('run')
+                    );
+                    if (!defaultAnimation) {
+                        defaultAnimation = animations[0];
+                    }
+                    
+                    if (defaultAnimation) {
+                        currentMovingSpine.state.setAnimation(0, defaultAnimation.name, true);
+                        originalAnimation = defaultAnimation.name;
+                        isMoving = true;
+                        startMoving();
+                    }
+                    
+                    console.log('移动Spine模型加载成功！');
+                } catch (e) {
+                    console.error('创建移动Spine对象时出错:', e);
+                    if (loadingDiv) {
+                        loadingDiv.style.display = 'block';
+                        loadingDiv.textContent = '错误: ' + (e.message || '未知错误');
+                    }
+                }
+            });
+        }
+        
+        function startMoving() {
+            if (!currentMovingSpine || !isMoving) return;
+            movingApp.ticker.add(moveModel);
+        }
+        
+        function stopMoving() {
+            isMoving = false;
+            isPaused = false;
+            if (movingApp) {
+                movingApp.ticker.remove(moveModel);
+            }
+        }
+        
+        // 新增：命中测试与全局拖拽代理（单宠物）
+        function toStageXY(e){
+          if (!movingApp || !movingApp.view) return {x:0,y:0};
+          const rect = movingApp.view.getBoundingClientRect();
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        function getPetScreenRect(){
+          if (!currentMovingSpine || !movingApp || !movingApp.view) return null;
+          try {
+            const b = currentMovingSpine.getBounds();
+            const rect = movingApp.view.getBoundingClientRect();
+            const left = rect.left + b.x;
+            const top = rect.top + b.y;
+            const width = b.width;
+            const height = b.height;
+            return { left, top, right: left + width, bottom: top + height };
+          } catch (_) { return null; }
+        }
+        function pointInRect(x, y, r){ return r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }
+        function drawHighlight(){
+          if (!currentMovingSpine || !movingApp) return;
+          try {
+            const b = currentMovingSpine.getBounds();
+            if (!highlightGfx) {
+              highlightGfx = new PIXI.Graphics();
+              highlightGfx.zIndex = (currentMovingSpine.zIndex || 0) + 1;
+              movingApp.stage.addChild(highlightGfx);
+              if (movingApp.stage.sortableChildren !== true) movingApp.stage.sortableChildren = true;
+            }
+            highlightGfx.clear();
+            highlightGfx.lineStyle(3, 0xFFD400, 1);
+            highlightGfx.drawRect(b.x, b.y, b.width, b.height);
+          } catch (_) {}
+        }
+        function removeHighlight(){
+          if (highlightGfx && movingApp && movingApp.stage) {
+            try { highlightGfx.clear(); movingApp.stage.removeChild(highlightGfx); } catch (_) {}
+            highlightGfx = null;
+          }
+        }
+        function onPointerDown(e){
+          const container = document.getElementById('spine-moving-pet');
+          if (!container || container.style.display === 'none') return;
+          const r = getPetScreenRect();
+          if (!pointInRect(e.clientX, e.clientY, r)) return;
+          if (!currentMovingSpine) return;
+          const { x, y } = toStageXY(e);
+          isDragging = true;
+          isMouseInteracting = true; // 暂停自动/随机
+          vx = 0; vy = 0; // 清零物理速度
+          dragOffsetX = currentMovingSpine.x - x;
+          dragOffsetY = currentMovingSpine.y - y;
+          dropStartY = currentMovingSpine.y;
+          pointerSamples.length = 0;
+          pushPointerSample(x, y, (self.performance ? performance.now() : Date.now()));
+          drawHighlight();
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        function onPointerMove(e){
+          if (!isDragging || !currentMovingSpine) return;
+          const { x, y } = toStageXY(e);
+          currentMovingSpine.x = Math.max(0, Math.min(movingApp.screen.width, x + dragOffsetX));
+          currentMovingSpine.y = Math.max(0, y + dragOffsetY);
+          pushPointerSample(x, y, (self.performance ? performance.now() : Date.now()));
+          drawHighlight();
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        function onPointerUp(e){
+          if (!isDragging) return;
+          removeHighlight();
+          isDragging = false;
+          isMouseInteracting = false;
+          const v = computeReleaseVelocity();
+          vx = v.vx; vy = v.vy;
+          isOnGround = false; // 空中自由运动
+          dropStartY = currentMovingSpine ? currentMovingSpine.y : null;
+          e.stopPropagation();
+          e.preventDefault();
+        }
+        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('pointermove', onPointerMove, true);
+        document.addEventListener('pointerup', onPointerUp, true);
+        document.addEventListener('pointercancel', onPointerUp, true);
+        
+        // 用惯性物理替换移动更新
+        function moveModel() {
+          if (!currentMovingSpine || !isMoving) return;
+          // 拖拽时不更新物理
+          if (isDragging) return;
+          const dt = (movingApp && movingApp.ticker && typeof movingApp.ticker.deltaMS === 'number') ? (movingApp.ticker.deltaMS / 1000) : (1/60);
+          // 重力（离地才生效）
+          if (!isOnGround) {
+            vy += gravity * dt;
+          }
+          // 空气阻力
+          const air = Math.max(0, 1 - airFriction * dt);
+          vx *= air;
+          if (!isOnGround) vy *= air;
+          // 地面静摩擦
+          if (isOnGround) {
+            const sign = Math.sign(vx);
+            const mag = Math.max(0, Math.abs(vx) - staticFriction * dt);
+            vx = sign * mag;
+          }
+          // 限速
+          vx = Math.max(-maxSpeedX, Math.min(maxSpeedX, vx));
+          vy = Math.max(-maxSpeedY, Math.min(maxSpeedY, vy));
+          // 积分位置
+          currentMovingSpine.x += vx * dt;
+          currentMovingSpine.y += vy * dt;
+          // 垂直边界/落地
+          const groundY = movingApp.screen.height;
+          if (currentMovingSpine.y >= groundY) {
+            if (!isOnGround && dropStartY != null) {
+              const droppedHeight = groundY - dropStartY;
+              if (droppedHeight >= droppedThreshold) {
+                // 这里可触发一次性落地动画
+                try { handleMouseClick && handleMouseClick(); } catch (_) {}
+              }
+            }
+            currentMovingSpine.y = groundY;
+            vy = 0;
+            isOnGround = true;
+          } else if (currentMovingSpine.y < 0) {
+            currentMovingSpine.y = 0;
+            vy = 0;
+            isOnGround = false;
+          } else {
+            isOnGround = false;
+          }
+          // 水平边界 + 反弹
+          if (currentMovingSpine.x <= 0) {
+            currentMovingSpine.x = 0;
+            vx = -vx * resilience;
+          } else if (currentMovingSpine.x >= movingApp.screen.width) {
+            currentMovingSpine.x = movingApp.screen.width;
+            vx = -vx * resilience;
+          }
+          // 朝向
+          if (currentMovingSpine.skeleton) {
+            if (vx > 5) currentMovingSpine.skeleton.scaleX = Math.abs(currentMovingSpine.skeleton.scaleX);
+            else if (vx < -5) currentMovingSpine.skeleton.scaleX = -Math.abs(currentMovingSpine.skeleton.scaleX);
+          }
+          // 几乎静止时可以保留随机暂停趣味
+          if (isOnGround && Math.abs(vx) < 5 && Math.abs(vy) < 5) {
+            if (!isMouseInteracting && !isPaused && Math.random() < 0.003) {
+              startRandomPause();
+            }
+          }
+        }
+        
+        function startRandomPause() {
+            if (!currentMovingSpine || isPaused || isMouseInteracting) return;
+            
+            const pauseAnimations = ['interact', 'relax', 'sleep', 'idle', 'stand'];
+            const availableAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+                pauseAnimations.some(pauseAnim => anim.name.toLowerCase().includes(pauseAnim.toLowerCase()))
+            );
+            
+            if (availableAnimations.length > 0) {
+                const randomAnim = availableAnimations[Math.floor(Math.random() * availableAnimations.length)];
+                currentMovingSpine.state.setAnimation(0, randomAnim.name, false);
+                isPaused = true;
+                
+                currentMovingSpine.state.addListener({
+                    complete: function(entry) {
+                        if (entry.animation.name === randomAnim.name && isPaused) {
+                            isPaused = false;
+                            if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                                currentMovingSpine.state.setAnimation(0, originalAnimation, true);
+                            }
+                            currentMovingSpine.state.clearListeners();
+                        }
+                    }
+                });
+            }
+        }
+        
+        function handleMouseClick() {
+            if (!currentMovingSpine || isMouseInteracting) return;
+            
+            const interactAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+                anim.name.toLowerCase().includes('interact')
+            );
+            
+            if (interactAnimations.length > 0) {
+                const interactAnim = interactAnimations[0];
+                currentMovingSpine.state.setAnimation(0, interactAnim.name, false);
+                isMouseInteracting = true;
+                isPaused = false;
+                
+                currentMovingSpine.state.addListener({
+                    complete: function(entry) {
+                        if (entry.animation.name === interactAnim.name && isMouseInteracting) {
+                            isMouseInteracting = false;
+                            if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                                currentMovingSpine.state.setAnimation(0, originalAnimation, true);
+                            }
+                            currentMovingSpine.state.clearListeners();
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 暴露全局函数
+        window.toggleMovingPet = function(enable) {
+            const container = document.getElementById('spine-moving-pet');
+            const fixedPet = document.getElementById('spine-pet');
+            
+            if (enable) {
+                container.style.display = 'block';
+                fixedPet.style.display = 'none';
+                
+                if (!movingApp) {
+                    initMovingPet();
+                }
+                
+                // 动态获取当前选择的模型
+                fetch('/api/spine_model/current')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.skel_path && data.atlas_path) {
+                            setTimeout(() => loadMovingSpineModel(data.skel_path, data.atlas_path), 100);
+                        } else {
+                            // 回退到模板变量
+                            const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                            const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                            if (skelUrl && atlasUrl) {
+                                setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取当前模型失败:', error);
+                        // 回退到模板变量
+                        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                        if (skelUrl && atlasUrl) {
+                            setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                        }
+                    });
+            } else {
+                container.style.display = 'none';
+                fixedPet.style.display = 'block';
+                stopMoving();
+            }
+        };
+        
+        window.refreshMovingPet = function(newSkelUrl, newAtlasUrl) {
+            if (document.getElementById('spine-moving-pet').style.display !== 'none') {
+                loadMovingSpineModel(newSkelUrl, newAtlasUrl);
+            }
+        };
+        
+        // 页面加载时检查宠物模式设置
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedMode = localStorage.getItem('petMode');
+            if (savedMode === 'moving') {
+                setTimeout(() => {
+                    if (typeof window.toggleMovingPet === 'function') {
+                        window.toggleMovingPet(true);
+                    }
+                }, 500);
+            }
+        });
+    })();
+    </script>
+    
+    <!-- 全局背景设置加载 -->
+    <script>
+    // 加载背景设置
+    function loadBackgroundSettings() {
+        const savedImage = localStorage.getItem('backgroundImage');
+        const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
+        
+        if (savedImage) {
+            document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
+            document.documentElement.style.setProperty('--bg-opacity', savedOpacity / 100);
+        }
+    }
+    
+    // 页面加载时自动应用背景设置
+    document.addEventListener('DOMContentLoaded', loadBackgroundSettings);
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>

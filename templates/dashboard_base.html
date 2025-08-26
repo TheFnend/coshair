@@ -1,5 +1,3 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,6 +13,11 @@
     
     <!-- 网站图标 -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='头像_耀骑士临光.png') }}">
+    
+    <!-- PIXI.js and Spine dependencies for moving pet -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.2.2/dist/browser/pixi.js"
+            integrity="sha256-AiXDYWt7rqC7JuOBLIvL2GuRGjjE1mvYepH56aycTPc=" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='naganeko.pages.dev/chibi-gif/js2/pixi-spine-3.8.umd_all-3.8@3.0.16.js') }}"></script>
     
     <style>
 
@@ -452,6 +455,7 @@
     </style>
     
     {% block extra_css %}{% endblock %}
+
 </head>
 <body class="{% if is_android %}android-device{% elif is_mobile %}mobile-device{% else %}desktop-device{% endif %}"{% if is_android %} data-platform="android"{% elif is_mobile %} data-platform="mobile"{% else %} data-platform="desktop"{% endif %}>
     <!-- 侧边栏 -->
@@ -539,45 +543,1339 @@
     </div>
     <div class="mobile-overlay"></div>
 
+    <!-- 固定位置的宠物容器 -->
+    <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+    
+    <!-- 全屏移动宠物容器 -->
+    <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; top:0px; left:0px; width:100vw; height:100vh; z-index: 1000; pointer-events:none; display:none; overflow: visible;">
+        <div id="spine-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px; display:none;">正在加载模型...</div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
+    <script src="{{ url_for('spine_player_js_38') }}?v=2"></script>
+    <link rel="stylesheet" href="{{ url_for('spine_player_css_38') }}?v=2">
     <script>
-    // 页面加载时恢复背景设置
-    window.addEventListener('load', function() {
+    // 全局函数：处理包含#的URL，进行编码以防止被截断
+    window.safeUrl = function(url) {
+        if (typeof url === 'string' && url.includes('#')) {
+            return url.replace(/#/g, '%23');
+        }
+        return url;
+    };
+
+    (function(){
+        // Patch 图片src写入，自动编码#
+        try {
+            if (!window.__spineImgSrcPatched) {
+                const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+                if (desc && desc.set && desc.get) {
+                    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                        configurable: true,
+                        enumerable: true,
+                        get: function(){ return desc.get.call(this); },
+                        set: function(val){
+                            try {
+                                if (typeof val === 'string' && val.includes('#') && (val.indexOf('/arkmodels/') !== -1)) {
+                                    val = val.replace(/#/g, '%23');
+                                }
+                            } catch (e) {}
+                            return desc.set.call(this, val);
+                        }
+                    });
+                    window.__spineImgSrcPatched = true;
+                }
+            }
+        } catch (e) {}
+
+        const containerId = 'spine-pet';
+        const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
+        const scale = isMobile ? 0.8 : 1;
+        const playerWidth = isMobile ? 180 : 220;
+        const playerHeight = isMobile ? 220 : 260;
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.style.width = playerWidth + 'px';
+        container.style.height = playerHeight + 'px';
+
+        function initPlayer(skelUrl, atlasUrl){
+            try {
+                const player = new spine.SpinePlayer(containerId, {
+                    skelUrl: skelUrl,
+                    atlasUrl: atlasUrl,
+                    showControls: false,
+                    backgroundColor: '#00000000',
+                    alpha: true,
+                    preserveDrawingBuffer: false,
+                    premultipliedAlpha: true,
+                    scale,
+                    success: (p) => {
+                        const prefer = ['idle', 'Idle', 'stand', 'Stand', 'breath', 'idle_1'];
+                        const all = p.animationState.data.skeletonData.animations.map(a=>a.name);
+                        let chosen = all.find(a=>prefer.includes(a)) || all[0];
+                        p.setAnimation(chosen, true);
+
+                        if (window._spinePetClickHandler) {
+                            container.removeEventListener('click', window._spinePetClickHandler);
+                        }
+                        const handler = ()=>{
+                            const idx = all.indexOf(chosen);
+                            const next = all[(idx + 1) % all.length];
+                            chosen = next;
+                            p.setAnimation(next, true);
+                        };
+                        container.addEventListener('click', handler);
+                        window._spinePetClickHandler = handler;
+                    }
+                });
+                window._spinePetPlayer = player;
+            } catch(e) {
+                console.error('Spine player init failed', e);
+            }
+        }
+
+        window.refreshSpinePet = function(newSkelUrl, newAtlasUrl){
+            if (!newSkelUrl || !newAtlasUrl) return;
+            container.innerHTML = '';
+            initPlayer(newSkelUrl, newAtlasUrl);
+        };
+        window.refreshSpinePetFromServer = async function(){
+            try {
+                const res = await fetch('/api/spine_model/current');
+                const data = await res.json();
+                if (data && data.success && data.skel_path && data.atlas_path) {
+                    window.refreshSpinePet(data.skel_path, data.atlas_path);
+                }
+            } catch (e) {
+                console.error('刷新宠物失败', e);
+            }
+        };
+
+        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+        initPlayer(skelUrl, atlasUrl);
+    })();
+    
+    // ==================== 移动宠物功能 ====================
+    (function() {
+        // 使用PIXI.js实现移动宠物，完全参考simple_spine_viewer.html的成功实现
+        let movingApp = null;
+        let movingPets = []; // 多宠物数组
+        let globalMoveSpeed = 1;
+        let tickerRunning = false; // 确保ticker只注册一次
+        
+        // 物理常量（多宠物通用）
+        const GRAVITY = 2200;       // px/s^2
+        const AIR_FRICTION = 2.0;   // 空气阻力
+        const STATIC_FRICTION = 900.0; // 地面静摩擦
+        const DYNAMIC_FRICTION = 300.0; // 动态摩擦（移动时使用，低于静摩擦）
+        const RESILIENCE = 0.3;     // 水平弹性（墙面反弹系数）
+        const DROP_THRESHOLD = 10.0; // 触发落地一次的最小高度
+        const MAX_SPEED_X = 2500.0;
+        const MAX_SPEED_Y = 3500.0;
+        
+        // 碰撞设置
+        let collisionEnabled = true; // 默认启用碰撞
+        
+        // MovingPet类定义 - 管理单个宠物的所有属性
+        class MovingPet {
+            constructor(spineObject, skelUrl, atlasUrl) {
+                this.spine = spineObject;
+                this.skelUrl = skelUrl;
+                this.atlasUrl = atlasUrl;
+                this.id = Date.now() + Math.random(); // 唯一ID
+                this.isMoving = false;
+                this.moveDirection = Math.random() > 0.5 ? 1 : -1; // 随机初始方向
+                this.moveSpeed = globalMoveSpeed;
+                this.isPaused = false;
+                this.isMouseInteracting = false;
+                this.originalAnimation = '';
+                this.currentAction = 'init';
+                this.actionStartTime = 0;
+                this.isInMoveAction = false;
+                this.hasInitialInteract = false;
+                this.bounds = null; // 缓存的边界信息
+                // 拖拽/惯性状态
+                this.isDragging = false;
+                this.dragOffsetX = 0;
+                this.dragOffsetY = 0;
+                this.highlightGfx = null;
+                // 惯性物理新增
+                this.vx = 0;
+                this.vy = 0;
+                this.isOnGround = true;
+                this.dropStartY = null;
+                this.pointerSamples = [];
+                // 睡觉图标
+                this.sleepBubble = null;
+                this.isSleeping = false;
+            }
+            
+            // 清理宠物资源
+            destroy() {
+                if (this.spine) {
+                    if (movingApp && movingApp.stage && movingApp.stage.children.includes(this.spine)) {
+                        movingApp.stage.removeChild(this.spine);
+                    }
+                    this.spine.off('click');
+                    if (this.highlightGfx && movingApp && movingApp.stage) {
+                        try { movingApp.stage.removeChild(this.highlightGfx); } catch(_) {}
+                    }
+                    if (this.sleepBubble && movingApp && movingApp.stage) {
+                        try { movingApp.stage.removeChild(this.sleepBubble); } catch(_) {}
+                    }
+                    if (this.spine.destroy) {
+                        this.spine.destroy();
+                    }
+                }
+            }
+        }
+        
+        function initMovingPet() {
+            // 检查PIXI是否可用
+            if (typeof PIXI === 'undefined') {
+                console.error('PIXI.js未加载，移动宠物功能不可用');
+                return;
+            }
+            
+            // 防御性补丁：避免将undefined添加到容器，导致updateTransform读取visible报错
+            try {
+                const C = PIXI && PIXI.Container;
+                if (C && !C.prototype.__safeAddChildPatched) {
+                    const origAddChild = C.prototype.addChild;
+                    C.prototype.addChild = function(...children){
+                        const filtered = children.filter(c => c && typeof c === 'object' && 'visible' in c);
+                        if (filtered.length !== children.length) {
+                            try { console.warn('PIXI addChild: 跳过无效子节点', { skipped: children.length - filtered.length }); } catch(_){ }
+                        }
+                        if (filtered.length === 0) return this;
+                        return origAddChild.apply(this, filtered);
+                    };
+                    C.prototype.__safeAddChildPatched = true;
+                }
+            } catch(_){ }
+            // 创建PIXI应用
+            movingApp = new PIXI.Application({
+                width: window.innerWidth,
+                height: window.innerHeight,
+                backgroundColor: 0x000000,
+                backgroundAlpha: 0,
+                antialias: true,
+                resolution: window.devicePixelRatio || 1,
+                autoDensity: true
+            });
+            
+            console.log('移动宠物PIXI应用初始化完成');
+        }
+        
+        // 编码URL路径中的每个段，避免如#等特殊字符导致加载失败
+        function encodePathSegments(path) {
+            if (!path) return path;
+            // 检查路径是否已经编码，避免双重编码
+            try {
+                // 如果路径已经编码，decodeURIComponent不会抛出错误
+                const decoded = decodeURIComponent(path);
+                // 如果解码后的路径与原路径不同，说明已经编码过了
+                if (decoded !== path) {
+                    return path; // 已经编码，直接返回
+                }
+            } catch (e) {
+                // 解码失败，说明路径可能包含特殊字符但未编码
+            }
+            return path.split('/').map(encodeURIComponent).join('/');
+        }
+        
+        // 添加新宠物到多宠物系统
+        function addMovingPet(skelUrl, atlasUrl, callback) {
+            if (!skelUrl || !atlasUrl) return;
+            
+            const loadingDiv = document.getElementById('spine-loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.textContent = '正在加载移动模型...';
+            }
+            
+            // 初始化PIXI应用（如果还没有）
+            if (!movingApp) {
+                initMovingPet();
+            }
+            
+            if (!movingApp) return;
+            
+            // 确保canvas已添加到容器
+            const container = document.getElementById('spine-moving-pet');
+            if (!container.contains(movingApp.view)) {
+                container.innerHTML = '';
+                container.appendChild(movingApp.view);
+                // 让canvas不拦截鼠标事件，底部按钮可点击
+                if (movingApp.view && movingApp.view.style) {
+                    movingApp.view.style.pointerEvents = 'none';
+                }
+                
+                // 重新添加loading div
+                const newLoadingDiv = document.createElement('div');
+                newLoadingDiv.id = 'spine-loading';
+                newLoadingDiv.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#4a90e2; font-size:14px;';
+                newLoadingDiv.textContent = '正在加载移动模型...';
+                container.appendChild(newLoadingDiv);
+            }
+            
+            try {
+                // 创建新的加载器实例
+                const loader = new PIXI.Loader();
+                
+                // 对skel路径进行分段编码，避免如#等特殊字符的问题
+                const encodedSkelUrl = encodePathSegments(skelUrl);
+                
+                // 自定义imageLoader，确保atlas中的png文件名也会被正确编码
+                const customImageLoaderFactory = function(ldr, namePrefix, baseUrl, imageOptions) {
+                    if (baseUrl && baseUrl.lastIndexOf('/') !== (baseUrl.length - 1)) {
+                        baseUrl += '/';
+                    }
+                    return function(line, callback) {
+                        const name = namePrefix + line;
+                        const encodedLine = line.split('/').map(encodeURIComponent).join('/');
+                        const url = baseUrl + encodedLine;
+                        const cachedResource = ldr.resources[name];
+                        if (cachedResource) {
+                            const done = () => {
+                                callback(cachedResource.texture.baseTexture);
+                            };
+                            if (cachedResource.texture) {
+                                done();
+                            } else {
+                                cachedResource.onAfterMiddleware.add(done);
+                            }
+                        } else {
+                            ldr.add(name, url, imageOptions, (resource) => {
+                                if (!resource.error) {
+                                    if (line.indexOf('-pma.') >= 0 && PIXI.ALPHA_MODES && resource.texture && resource.texture.baseTexture) {
+                                        resource.texture.baseTexture.alphaMode = PIXI.ALPHA_MODES.PMA;
+                                    }
+                                    callback(resource.texture.baseTexture);
+                                } else {
+                                    callback(null);
+                                }
+                            });
+                        }
+                    }
+                };
+                
+                // 添加Spine资源到加载器
+                loader.add('movingModel', encodedSkelUrl, {
+                    metadata: {
+                        imageLoader: customImageLoaderFactory
+                    }
+                });
+                
+                loader.load((loader, resources) => {
+                    try {
+                        if (!resources.movingModel || !resources.movingModel.spineData) {
+                            throw new Error('Spine数据加载失败');
+                        }
+                        
+                        // 隐藏加载文本
+                        const loadingDiv = document.getElementById('spine-loading');
+                        if (loadingDiv) loadingDiv.style.display = 'none';
+                        
+                        // 创建Spine对象
+                        const spineObject = new PIXI.spine.Spine(resources.movingModel.spineData);
+                        
+                        // 设置初始位置
+                        spineObject.x = movingApp.screen.width / 2;
+                        spineObject.y = movingApp.screen.height / 2;
+                        
+                        // 计算合适的缩放比例
+                        const bounds = spineObject.getBounds();
+                        const scaleX = (movingApp.screen.width * 0.8) / bounds.width;
+                        const scaleY = (movingApp.screen.height * 0.8) / bounds.height;
+                        const baseScale = Math.min(scaleX, scaleY);
+                        
+                        // 检查模型名称是否包含#字符，带#的模型通常较小需要放大
+                        const modelName = skelUrl.split('/').pop() || '';
+                        const hasHashInName = modelName.includes('#');
+                        const scale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3,0.5);
+                        
+                        spineObject.scale.set(scale);
+                        console.log(`模型缩放: ${modelName}, 包含#: ${hasHashInName}, 缩放比例: ${scale.toFixed(2)}`);
+                        
+                        // 缩放后重新调整位置：水平居中，底部精确贴合
+                        spineObject.x = movingApp.screen.width / 2;
+                        spineObject.y = movingApp.screen.height;
+                        
+                        // 创建MovingPet实例
+                        const pet = new MovingPet(spineObject, skelUrl, atlasUrl);
+                        pet.isMoving = true;
+                        
+                        // 添加到舞台（防御：确保对象有效）
+                        if (movingApp && movingApp.stage && spineObject) {
+                            movingApp.stage.addChild(spineObject);
+                        }
+                        
+                        // 设置模型为可交互
+                        spineObject.interactive = true;
+                        spineObject.buttonMode = true;
+                        
+                        // 移除点击交互，改为拖拽交互（在全局指针事件中处理）
+                        // spineObject.on('click', () => handleMouseClick(pet));
+                        
+                        // 优先播放move动画，如果没有则播放第一个动画
+                        let defaultAnimation = spineObject.state.data.skeletonData.animations.find(anim => 
+                            anim.name.toLowerCase().includes('move') || anim.name.toLowerCase().includes('walk')
+                        );
+                        if (!defaultAnimation) {
+                            defaultAnimation = spineObject.state.data.skeletonData.animations[0];
+                        }
+                        
+                        if (defaultAnimation) {
+                            spineObject.state.setAnimation(0, defaultAnimation.name, true);
+                            pet.originalAnimation = defaultAnimation.name;
+                        }
+                        
+                        // 添加到多宠物数组
+                        movingPets.push(pet);
+                        dispatchPetsChanged();
+                        
+                        // 初始位置避让：尽量放在不与其它宠物重叠的位置
+                        try {
+                            const pad = 8; // 适度的间距
+                            const maxTries = 20;
+                            // 获取当前宠物的宽度估计
+                            const b = getPetBounds(pet);
+                            const estW = (b && b.width) ? b.width : (movingApp.screen.width * 0.1);
+                            let placed = false;
+                            for (let t = 0; t < maxTries && !placed; t++) {
+                                const x = Math.random() * (movingApp.screen.width - estW) + estW / 2;
+                                spineObject.x = x;
+                                spineObject.y = movingApp.screen.height; // 贴底
+                                const nowB = getPetBounds(pet);
+                                placed = true;
+                                for (const other of movingPets) {
+                                    if (other === pet) continue;
+                                    const ob = getPetBounds(other);
+                                    if (ob && nowB && ob.right > nowB.left - pad && ob.left < nowB.right + pad) {
+                                        placed = false; break;
+                                    }
+                                }
+                            }
+                        } catch (e) { console.warn('初始避碰失败', e); }
+                        
+                        // 启动移动
+                        startMoving();
+                        
+                        console.log('移动Spine模型加载成功！');
+                        console.log('可用动画:', spineObject.state.data.skeletonData.animations.map(anim => anim.name));
+                    } catch (e) {
+                        console.error('创建移动Spine对象时出错:', e);
+                        const loadingDiv = document.getElementById('spine-loading');
+                        if (loadingDiv) {
+                            loadingDiv.style.display = 'block';
+                            loadingDiv.textContent = '错误: ' + (e.message || '未知错误');
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('加载移动Spine模型时出错:', error);
+                const loadingDiv = document.getElementById('spine-loading');
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'block';
+                    loadingDiv.textContent = '错误: ' + (error.message || '未知错误');
+                }
+            }
+        }
+        
+        function startMoving() {
+            if (!movingApp || movingPets.length === 0) return;
+            if (tickerRunning) return; // 防止重复添加导致速度翻倍
+            movingApp.ticker.add(moveModel);
+            tickerRunning = true;
+        }
+        
+        function stopMoving() {
+            movingPets.forEach(pet => {
+                pet.isMoving = false;
+                pet.isPaused = false;
+            });
+            if (movingApp) {
+                movingApp.ticker.remove(moveModel);
+            }
+            tickerRunning = false;
+        }
+        
+        // 添加清除所有宠物的函数
+        function clearAllPets() {
+            movingPets.forEach(pet => pet.destroy());
+            movingPets = [];
+            stopMoving();
+            console.log('已清除所有移动宠物');
+            // 通知变更 + 持久化
+            dispatchPetsChanged();
+        }
+        
+        // 添加删除单个宠物的函数
+        function removePet(petIndex) {
+            if (petIndex >= 0 && petIndex < movingPets.length) {
+                const pet = movingPets[petIndex];
+                pet.destroy();
+                movingPets.splice(petIndex, 1);
+                if (movingPets.length === 0) {
+                    stopMoving();
+                }
+                console.log(`已删除宠物 ${petIndex}`);
+                // 通知变更 + 持久化
+                dispatchPetsChanged();
+                return true;
+            }
+            return false;
+        }
+        
+        // 新的状态管理变量
+        let currentAction = 'init'; // 当前动作状态
+        let actionStartTime = 0;
+        let isInMoveAction = false;
+        let hasInitialInteract = false;
+        
+        // 动作权重配置
+        const ACTION_WEIGHTS = {
+            'relax': 160,    // relax/idle
+            'sleep': 32,
+            'move_left': 32, // 向左移动
+            'move_right': 32, // 向右移动
+            'special': 16    // 如果模型有special动作
+        };
+        
+        // 加权随机选择动作（按宠物）
+        function selectWeightedAction(pet) {
+            if (!pet || !pet.spine) return 'relax';
+            
+            const animations = pet.spine.state.data.skeletonData.animations;
+            const weights = [];
+            const actions = [];
+            
+            const hasRelaxIdle = animations.some(anim => {
+                const name = anim.name.toLowerCase();
+                return name.includes('relax') || name.includes('idle');
+            });
+            if (hasRelaxIdle) {
+                weights.push(ACTION_WEIGHTS.relax);
+                actions.push('relax');
+            }
+            
+            const hasSleep = animations.some(anim => 
+                anim.name.toLowerCase().includes('sleep')
+            );
+            if (hasSleep) {
+                weights.push(ACTION_WEIGHTS.sleep);
+                actions.push('sleep');
+            }
+            
+            const hasMove = animations.some(anim => {
+                const name = anim.name.toLowerCase();
+                return name.includes('move') || name.includes('walk') || name.includes('run');
+            });
+            if (hasMove) {
+                weights.push(ACTION_WEIGHTS.move_left);
+                actions.push('move_left');
+                weights.push(ACTION_WEIGHTS.move_right);
+                actions.push('move_right');
+            }
+            
+            const hasSpecial = animations.some(anim => 
+                anim.name.toLowerCase().includes('special')
+            );
+            if (hasSpecial) {
+                weights.push(ACTION_WEIGHTS.special);
+                actions.push('special');
+            }
+            
+            const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+            let random = Math.random() * totalWeight;
+            
+            for (let i = 0; i < weights.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    return actions[i];
+                }
+            }
+            
+            return actions[0] || 'relax';
+        }
+        
+        // 执行动作（按宠物）
+        function performAction(pet, action) {
+            if (!pet || !pet.spine) return;
+            
+            pet.currentAction = action;
+            pet.actionStartTime = Date.now();
+            
+            const animations = pet.spine.state.data.skeletonData.animations;
+            let targetAnimation = null;
+            
+            switch (action) {
+                case 'relax':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('relax') || name.includes('idle');
+                    });
+                    pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
+                case 'sleep':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('sleep')
+                    );
+                    pet.isInMoveAction = false;
+                    // 睡觉时统一朝右，确保睡觉图标方向一致
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                    }
+                    showSleepBubble(pet); // 显示睡觉图标
+                    break;
+                case 'move_left':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('move') || name.includes('walk') || name.includes('run');
+                    });
+                    pet.isInMoveAction = true;
+                    pet.moveDirection = -1;
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
+                    }
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
+                case 'move_right':
+                    targetAnimation = animations.find(anim => {
+                        const name = anim.name.toLowerCase();
+                        return name.includes('move') || name.includes('walk') || name.includes('run');
+                    });
+                    pet.isInMoveAction = true;
+                    pet.moveDirection = 1;
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                    }
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
+                case 'special':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('special')
+                    );
+                    pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
+                case 'interact':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('interact')
+                    );
+                    pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
+            }
+            
+            if (!targetAnimation) {
+                targetAnimation = animations.find(anim => 
+                    anim.name.toLowerCase().includes('idle')
+                ) || animations[0];
+            }
+            
+            if (targetAnimation) {
+                const isLoop = action === 'move_left' || action === 'move_right' || action === 'relax';
+                pet.spine.state.setAnimation(0, targetAnimation.name, isLoop);
+                
+                if (!isLoop) {
+                    pet.spine.state.addListener({
+                        complete: function(entry) {
+                            if (entry.animation.name === targetAnimation.name) {
+                                // 清除监听器，选择下一个动作
+                                pet.spine.state.clearListeners();
+                                const nextAction = selectWeightedAction(pet);
+                                performAction(pet, nextAction);
+                            }
+                        }
+                    });
+                } else {
+                    const duration = 3000 + Math.random() * 5000; // 3-8秒
+                    setTimeout(() => {
+                        if (pet.currentAction === action && !pet.isMouseInteracting) {
+                            const nextAction = selectWeightedAction(pet);
+                            performAction(pet, nextAction);
+                        }
+                    }, duration);
+                }
+            }
+        }
+        
+        function moveModel() {
+            if (!movingApp || movingPets.length === 0) return;
+            
+            const dt = (movingApp && movingApp.ticker && typeof movingApp.ticker.deltaMS === 'number') ? (movingApp.ticker.deltaMS / 1000) : (1/60);
+            const groundY = movingApp.screen.height;
+            for (const pet of movingPets) {
+                if (!pet.isMoving || !pet.spine) continue;
+                
+                // 拖拽或点击交互中不更新物理
+                if (pet.isDragging || pet.isMouseInteracting) continue;
+                
+                // 首次进入时可播放一次交互动画
+                if (!pet.hasInitialInteract) {
+                    pet.hasInitialInteract = true;
+                    performAction(pet, 'interact');
+                }
+                const wasOnGround = !!pet.isOnGround;
+                
+                // 移动动作：给宠物施加水平推力
+                if (pet.isInMoveAction && pet.moveDirection) {
+                    const moveForce = pet.isOnGround ? 800 : 400; // 地面推力更强，空中推力较弱
+                    pet.vx += pet.moveDirection * moveForce * dt;
+                }
+                
+                // 重力（离地才生效）
+                if (!pet.isOnGround) {
+                    pet.vy += GRAVITY * dt;
+                }
+                // 空气阻力
+                const air = Math.max(0, 1 - AIR_FRICTION * dt);
+                pet.vx *= air;
+                if (!pet.isOnGround) pet.vy *= air;
+                // 地面摩擦：移动时用动态摩擦，否则用静摩擦
+                if (pet.isOnGround) {
+                    const groundFriction = pet.isInMoveAction ? DYNAMIC_FRICTION : STATIC_FRICTION;
+                    const sign = Math.sign(pet.vx);
+                    const mag = Math.max(0, Math.abs(pet.vx) - groundFriction * dt);
+                    pet.vx = sign * mag;
+                }
+                // 限速
+                pet.vx = Math.max(-MAX_SPEED_X, Math.min(MAX_SPEED_X, pet.vx));
+                pet.vy = Math.max(-MAX_SPEED_Y, Math.min(MAX_SPEED_Y, pet.vy));
+                // 积分位置
+                pet.spine.x += pet.vx * dt;
+                pet.spine.y += pet.vy * dt;
+                // 垂直边界与落地
+                if (pet.spine.y >= groundY) {
+                    if (!wasOnGround && pet.dropStartY != null) {
+                        const droppedHeight = groundY - pet.dropStartY;
+                        if (droppedHeight >= DROP_THRESHOLD) {
+                            performAction(pet, 'interact');
+                        }
+                    }
+                    pet.spine.y = groundY;
+                    pet.vy = 0;
+                    pet.isOnGround = true;
+                } else if (pet.spine.y < 0) {
+                    pet.spine.y = 0;
+                    pet.vy = 0;
+                    pet.isOnGround = false;
+                } else {
+                    pet.isOnGround = false;
+                }
+                // 水平边界 + 反弹
+                if (pet.spine.x <= 0) {
+                    pet.spine.x = 0; 
+                    pet.vx = Math.abs(pet.vx) * RESILIENCE; // 确保向右的速度
+                    pet.moveDirection = 1; // 向右移动
+                    // 如果速度太小，给一个最小推力
+                    if (Math.abs(pet.vx) < 100) {
+                        pet.vx = 100;
+                    }
+                } else if (pet.spine.x >= movingApp.screen.width) {
+                    pet.spine.x = movingApp.screen.width; 
+                    pet.vx = -Math.abs(pet.vx) * RESILIENCE; // 确保向左的速度
+                    pet.moveDirection = -1; // 向左移动
+                    // 如果速度太小，给一个最小推力
+                    if (Math.abs(pet.vx) < 100) {
+                        pet.vx = -100;
+                    }
+                }
+                // 根据速度翻转朝向
+                if (pet.spine.skeleton) {
+                    if (pet.vx > 5) pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                    else if (pet.vx < -5) pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
+                }
+            }
+            // 碰撞与重叠分离（根据设置决定是否执行）
+            if (collisionEnabled) {
+                separateOverlappingPets();
+            }
+            
+            // 更新睡觉图标位置
+            for (const pet of movingPets) {
+                if (pet && pet.isSleeping && pet.sleepBubble && pet.spine) {
+                    updateSleepBubblePosition(pet);
+                }
+            }
+        }
+
+        // 计算宠物近似边界（仅用于水平碰撞）
+        function getPetBounds(pet) {
+            if (!pet || !pet.spine) return null;
+            try {
+                const b = pet.spine.getBounds();
+                // Spine的bounds以其局部空间为主，我们更关注屏幕上的矩形
+                const width = b.width;
+                const height = b.height;
+                const centerX = pet.spine.x; // 已在舞台坐标系
+                const right = centerX + width / 2;
+                const left = centerX - width / 2;
+                // 贴底，因此只做X轴分离
+                return { left, right, width, height };
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        // 计算宠物屏幕矩形，用于命中测试（精准映射到屏幕坐标）
+        function getPetScreenRect(pet) {
+            if (!pet || !pet.spine || !movingApp || !movingApp.view) return null;
+            try {
+                const b = pet.spine.getBounds();
+                const rect = movingApp.view.getBoundingClientRect();
+                const left = rect.left + b.x;
+                const top = rect.top + b.y;
+                const width = b.width;
+                const height = b.height;
+                return { left, top, right: left + width, bottom: top + height, width, height };
+            } catch (e) { return null; }
+        }
+        function pointInRect(x, y, r) {
+            return r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+        }
+        
+        // 全局点击穿透代理：仅当命中宠物时拦截并触发交互
+        (function setupGlobalPetClickProxy(){
+            const container = document.getElementById('spine-moving-pet');
+            if (container) {
+                container.style.pointerEvents = 'none';
+            }
+            // 拖拽状态
+            let dragState = { pet: null, pointerId: null };
+            
+            // 拖拽采样助手（每只宠物维护自己的采样队列）
+            function pushPointerSample(pet, x, y, tMs){
+                if (!pet.pointerSamples) pet.pointerSamples = [];
+                pet.pointerSamples.push({ x, y, t: tMs });
+                const cutoff = tMs - 160;
+                while (pet.pointerSamples.length && pet.pointerSamples[0].t < cutoff) {
+                    pet.pointerSamples.shift();
+                }
+            }
+            function computeReleaseVelocity(pet){
+                const n = pet.pointerSamples ? pet.pointerSamples.length : 0;
+                if (n < 2) return { vx: 0, vy: 0 };
+                const end = pet.pointerSamples[n - 1];
+                let i = n - 2;
+                while (i >= 0 && (end.t - pet.pointerSamples[i].t) < 60) i--;
+                i = Math.max(0, i);
+                const start = pet.pointerSamples[i];
+                const dt = Math.max(1, end.t - start.t) / 1000;
+                return { vx: (end.x - start.x) / dt, vy: (end.y - start.y) / dt };
+            }
+            
+            function toStageXY(e){
+                if (!movingApp || !movingApp.view) return {x:0,y:0};
+                const rect = movingApp.view.getBoundingClientRect();
+                return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            }
+            // 自定义Outline Shader用于模型描边
+            const dragOutlineShaderFrag = `
+                precision mediump float;
+                varying vec2 vTextureCoord;
+                uniform sampler2D uSampler;
+                uniform vec2 pixelSize;    // 1.0 / screen size
+                uniform float thickness;   // 描边粗细
+                uniform vec4 outlineColor; // RGBA 颜色
+                void main(void) {
+                    vec4 base = texture2D(uSampler, vTextureCoord);
+                    float a = base.a;
+                    
+                    // 如果当前像素已经有内容，直接返回原色，不添加描边
+                    if (a > 0.01) {
+                        gl_FragColor = base;
+                        return;
+                    }
+                    
+                    // 只对透明像素检测邻域
+                    float maxAlpha = 0.0;
+                    // 采样邻域 8 个方向
+                    for (int x = -1; x <= 1; x++) {
+                        for (int y = -1; y <= 1; y++) {
+                            if (x == 0 && y == 0) continue;
+                            vec2 offset = vec2(float(x), float(y)) * pixelSize * thickness;
+                            vec4 s = texture2D(uSampler, vTextureCoord + offset);
+                            maxAlpha = max(maxAlpha, s.a);
+                        }
+                    }
+                    
+                    // 只有在透明区域且邻域有内容时才绘制描边
+                    if (maxAlpha > 0.01) {
+                        gl_FragColor = vec4(outlineColor.rgb, outlineColor.a);
+                    } else {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0); // 完全透明
+                    }
+                }
+            `;
+            
+            function ensureDragOutlineFilter() {
+                if (!window.globalDragOutlineFilter) {
+                    window.globalDragOutlineFilter = new PIXI.Filter(undefined, dragOutlineShaderFrag, {
+                        pixelSize: new Float32Array([1 / movingApp.screen.width, 1 / movingApp.screen.height]),
+                        thickness: 20.0,  // 减小thickness避免白边
+                        outlineColor: new Float32Array([1.0, 0.84, 0.0, 1.0]) // 黄色 #FFD400
+                    });
+                }
+                return window.globalDragOutlineFilter;
+            }
+            
+            function drawHighlight(pet){
+                if (!pet || !pet.spine || !movingApp) return;
+                try {
+                    const filter = ensureDragOutlineFilter();
+                    const filters = pet.spine.filters || [];
+                    if (!filters.includes(filter)) {
+                        pet.spine.filters = [...filters, filter];
+                    }
+                } catch(_) {}
+            }
+            function removeHighlight(pet){
+                if (pet && pet.spine) {
+                    try {
+                        // 移除轮廓滤镜
+                        if (pet.spine.filters && pet.spine.filters.length) {
+                            const outlineFilter = window.globalDragOutlineFilter;
+                            if (outlineFilter) {
+                                pet.spine.filters = pet.spine.filters.filter(f => f !== outlineFilter);
+                                if (pet.spine.filters.length === 0) {
+                                    pet.spine.filters = null;
+                                }
+                            }
+                        }
+                    } catch(_) {}
+                }
+            }
+            
+            function hitTestPets(clientX, clientY){
+                for (let i = movingPets.length - 1; i >= 0; i--) {
+                    const pet = movingPets[i];
+                    const r = getPetScreenRect(pet);
+                    if (pointInRect(clientX, clientY, r)) return pet;
+                }
+                return null;
+            }
+            
+            function onPointerDown(e){
+                const cont = document.getElementById('spine-moving-pet');
+                if (!cont || cont.style.display === 'none') return;
+                const pet = hitTestPets(e.clientX, e.clientY);
+                if (!pet) return;
+                const { x, y } = toStageXY(e);
+                const now = self.performance ? performance.now() : Date.now();
+                
+                // 记录单击检测所需的信息
+                pet.clickStartTime = now;
+                pet.clickStartX = x;
+                pet.clickStartY = y;
+                pet.hasMoved = false;
+                
+                pet.isDragging = true;
+                pet.isMouseInteracting = true; // 暂停自动行为
+                pet.vx = 0; pet.vy = 0; // 清零速度
+                pet.dragOffsetX = pet.spine.x - x;
+                pet.dragOffsetY = pet.spine.y - y;
+                pet.dropStartY = pet.spine.y;
+                pet.pointerSamples = [];
+                pushPointerSample(pet, x, y, now);
+                dragState = { pet, pointerId: e.pointerId };
+                drawHighlight(pet);
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            function onPointerMove(e){
+                if (!dragState.pet || (e.pointerId !== dragState.pointerId)) return;
+                const pet = dragState.pet;
+                const { x, y } = toStageXY(e);
+                
+                // 检测是否有明显移动（用于区分单击和拖拽）
+                if (!pet.hasMoved && pet.clickStartX !== undefined && pet.clickStartY !== undefined) {
+                    const moveDistance = Math.sqrt(
+                        Math.pow(x - pet.clickStartX, 2) + Math.pow(y - pet.clickStartY, 2)
+                    );
+                    if (moveDistance > 5) { // 移动超过5像素认为是拖拽
+                        pet.hasMoved = true;
+                    }
+                }
+                
+                pet.spine.x = Math.max(0, Math.min(movingApp.screen.width, x + pet.dragOffsetX));
+                pet.spine.y = Math.max(0, y + pet.dragOffsetY);
+                pushPointerSample(pet, x, y, (self.performance ? performance.now() : Date.now()));
+                drawHighlight(pet);
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            function onPointerUp(e){
+                if (!dragState.pet || (dragState.pointerId !== null && e.pointerId !== dragState.pointerId)) return;
+                const pet = dragState.pet;
+                
+                // 检测是否为单击（时间短且移动距离小）
+                const now = self.performance ? performance.now() : Date.now();
+                const clickDuration = now - (pet.clickStartTime || 0);
+                const isClick = !pet.hasMoved && clickDuration < 300; // 300ms内且无明显移动认为是单击
+                
+                removeHighlight(pet);
+                pet.isDragging = false;
+                
+                if (isClick) {
+                    // 单击触发interact动作
+                    pet.isMouseInteracting = false; // 重置状态以允许interact
+                    handleMouseClick(pet);
+                } else {
+                    // 拖拽释放，应用惯性
+                    pet.isMouseInteracting = false; // 释放后允许自由运动
+                    const v = computeReleaseVelocity(pet);
+                    pet.vx = v.vx; pet.vy = v.vy;
+                    pet.dropStartY = pet.spine ? pet.spine.y : null;
+                    pet.isOnGround = false;
+                }
+                
+                // 清理单击检测相关属性
+                pet.clickStartTime = undefined;
+                pet.clickStartX = undefined;
+                pet.clickStartY = undefined;
+                pet.hasMoved = false;
+                
+                dragState = { pet: null, pointerId: null };
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            document.addEventListener('pointerdown', onPointerDown, true);
+            document.addEventListener('pointermove', onPointerMove, true);
+            document.addEventListener('pointerup', onPointerUp, true);
+            document.addEventListener('pointercancel', onPointerUp, true);
+        })();
+        
+        function separateOverlappingPets() {
+            const pad = 4; // 需要保留的最小间距
+            const maxPush = 6; // 限制每帧最大分离位移，避免突然跃迁
+            for (let i = 0; i < movingPets.length; i++) {
+                const a = movingPets[i];
+                const ab = getPetBounds(a);
+                if (!ab) continue;
+                for (let j = i + 1; j < movingPets.length; j++) {
+                    const b = movingPets[j];
+                    const bb = getPetBounds(b);
+                    if (!bb) continue;
+                    const overlap = Math.min(ab.right, bb.right) - Math.max(ab.left, bb.left);
+                    if (overlap > 0) { // 仅在真实重叠时分离，减少抖动
+                        // 基于中心相对位置的对称分离，避免按移动方向导致“换位”
+                        let dir = Math.sign((a.spine.x || 0) - (b.spine.x || 0));
+                        if (dir === 0) dir = (i < j ? 1 : -1);
+                        const push = Math.min((overlap + pad) / 2, maxPush);
+                        a.spine.x += dir * push;
+                        b.spine.x -= dir * push;
+                        // 边界修正
+                        a.spine.x = Math.max(0, Math.min(window.innerWidth, a.spine.x));
+                        b.spine.x = Math.max(0, Math.min(window.innerWidth, b.spine.x));
+                    }
+                }
+            }
+        }
+        
+        function handleMouseClick(pet) {
+            if (!pet || !pet.spine || pet.isMouseInteracting) return;
+            
+            const interactAnimations = pet.spine.state.data.skeletonData.animations.filter(anim => 
+                anim.name.toLowerCase().includes('interact')
+            );
+            
+            if (interactAnimations.length > 0) {
+                const interactAnim = interactAnimations[0];
+                pet.spine.state.setAnimation(0, interactAnim.name, false);
+                pet.isMouseInteracting = true;
+                
+                pet.spine.state.addListener({
+                    complete: function(entry) {
+                        if (entry.animation.name === interactAnim.name && pet.isMouseInteracting) {
+                            pet.isMouseInteracting = false;
+                            pet.spine.state.clearListeners();
+                            const nextAction = selectWeightedAction(pet);
+                            performAction(pet, nextAction);
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 睡觉图标管理函数
+        function showSleepBubble(pet) {
+            if (!pet || !pet.spine || !movingApp || !movingApp.stage) return;
+            
+            try {
+                // 如果已经有睡觉图标，先移除
+                hideSleepBubble(pet);
+                
+                // 创建睡觉图标
+                const texture = PIXI.Texture.from('/static/sleep-bubble.svg');
+                if (!texture || !texture.baseTexture) {
+                    console.warn('Sleep bubble texture not available');
+                    return;
+                }
+                
+                pet.sleepBubble = new PIXI.Sprite(texture);
+                if (!pet.sleepBubble) return;
+                
+                // 确保对象完全初始化
+                pet.sleepBubble.anchor.set(0.5, 1); // 底部中心锚点
+                pet.sleepBubble.scale.set(0.8); // 缩放到合适大小
+                pet.sleepBubble.visible = true; // 确保visible属性存在
+                pet.sleepBubble.zIndex = 10000; // 置顶显示
+                if (movingApp.stage && movingApp.stage.sortableChildren !== true) {
+                    movingApp.stage.sortableChildren = true;
+                }
+                
+                // 设置位置（宠物上方）
+                updateSleepBubblePosition(pet);
+                
+                // 安全地添加到舞台
+                if (movingApp && movingApp.stage && pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                    movingApp.stage.addChild(pet.sleepBubble);
+                    pet.isSleeping = true;
+                }
+                
+                // 轻微浮动动画偏移
+                if (pet.sleepBubble) {
+                    pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
+                }
+            } catch (error) {
+                console.error('Error creating sleep bubble:', error);
+                hideSleepBubble(pet);
+            }
+            
+            // 添加轻微的浮动动画
+            pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
+        }
+        
+        function hideSleepBubble(pet) {
+            if (!pet) return;
+            
+            if (pet.sleepBubble) {
+                try {
+                    // 确保对象仍然有效
+                    if (pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                        // 从舞台移除
+                        if (movingApp && movingApp.stage && movingApp.stage.children.includes(pet.sleepBubble)) {
+                            movingApp.stage.removeChild(pet.sleepBubble);
+                        }
+                        // 销毁PIXI对象
+                        if (pet.sleepBubble.destroy && typeof pet.sleepBubble.destroy === 'function') {
+                            pet.sleepBubble.destroy({ children: true, texture: false, baseTexture: false });
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Error removing sleep bubble:', error);
+                }
+                pet.sleepBubble = null;
+            }
+            pet.isSleeping = false;
+        }
+        
+        function updateSleepBubblePosition(pet) {
+            if (!pet || !pet.sleepBubble || !pet.spine) return;
+            
+            try {
+                // 再次检查sleepBubble是否仍然存在（防止异步销毁）
+                if (!pet.sleepBubble || pet.sleepBubble.destroyed) return;
+                
+                // 获取宠物边界
+                const bounds = pet.spine.getBounds();
+                if (!bounds) return; // 防止bounds为null
+                
+                // 安全地设置位置
+                if (pet.sleepBubble && typeof pet.spine.x === 'number') {
+                    pet.sleepBubble.x = pet.spine.x;
+                    pet.sleepBubble.y = bounds.y + 5; // 宠物上方10像素
+                    
+                    // 添加轻微的浮动效果
+                    if (pet.sleepBubble.animationOffset !== undefined) {
+                        const time = Date.now() * 0.002;
+                        pet.sleepBubble.y += Math.sin(time + pet.sleepBubble.animationOffset) * 3;
+                    }
+                }
+            } catch (error) {
+                // 如果出现错误，清理睡觉图标
+                console.warn('Sleep bubble position update failed:', error);
+                hideSleepBubble(pet);
+            }
+        }
+        
+        // 兼容旧接口：将loadMovingSpineModel映射到addMovingPet
+        function loadMovingSpineModel(skelUrl, atlasUrl, callback) {
+            return addMovingPet(skelUrl, atlasUrl, callback);
+        }
+        
+        // 持久化与变更事件派发
+        function savePetsToStorage(){
+            try {
+                const list = movingPets.map(p=>({ 
+                    skelUrl: p.skelUrl, 
+                    atlasUrl: p.atlasUrl,
+                    currentAction: p.currentAction,
+                    isSleeping: p.isSleeping
+                }));
+                localStorage.setItem('movingPets', JSON.stringify(list));
+            } catch(e) { console.warn('保存移动宠物状态失败', e); }
+        }
+        function dispatchPetsChanged(){
+            savePetsToStorage();
+            try {
+                const detail = { pets: movingPets.map((p, index)=>({ index, id: p.id, skelUrl: p.skelUrl, atlasUrl: p.atlasUrl })) };
+                window.dispatchEvent(new CustomEvent('movingPetsChanged', { detail }));
+            } catch(e) { /* ignore */ }
+        }
+        function restorePetsFromStorage(){
+            let list = [];
+            try { list = JSON.parse(localStorage.getItem('movingPets') || '[]'); } catch(e) { list = []; }
+            if (Array.isArray(list) && list.length > 0){
+                let delay = 0;
+                list.forEach(item => {
+                    if (item && item.skelUrl && item.atlasUrl){
+                        setTimeout(()=>{ loadMovingSpineModel(item.skelUrl, item.atlasUrl); }, delay);
+                        delay += 150;
+                    }
+                });
+                return true;
+            }
+            return false;
+        }
+        
+        // 暴露管理函数到window，供设置页调用
+        window.addMovingPet = addMovingPet;
+        window.clearAllPets = clearAllPets;
+        window.removePet = removePet;
+        window.removeLastPet = function() {
+            if (movingPets.length > 0) {
+                removePet(movingPets.length - 1);
+            }
+        };
+        window.getMovingPets = function(){
+            return movingPets.map((p, index)=>({ index, id: p.id, skelUrl: p.skelUrl, atlasUrl: p.atlasUrl }));
+        };
+        
+        // 碰撞设置控制函数
+        window.updateCollisionSettings = function(enabled) {
+            collisionEnabled = enabled;
+            console.log('宠物碰撞设置已更新:', enabled ? '启用' : '禁用');
+        };
+        
+        // 初始化碰撞设置（从localStorage读取）
+        function initCollisionSettings() {
+            const saved = localStorage.getItem('petCollisionEnabled');
+            if (saved !== null) {
+                collisionEnabled = saved === 'true';
+            }
+        }
+        
+        // 页面加载时初始化碰撞设置
+        initCollisionSettings();
+
+        // 在dashboard_base中也实现切换移动宠物模式的函数
+        window.toggleMovingPet = function(enable) {
+            const container = document.getElementById('spine-moving-pet');
+            const fixedPet = document.getElementById('spine-pet');
+            if (!container || !fixedPet) return;
+
+            if (enable) {
+                container.style.display = 'block';
+                fixedPet.style.display = 'none';
+
+                if (!movingApp) {
+                    initMovingPet();
+                }
+
+                // 先尝试从本地存储恢复多宠物，否则回退到当前模型
+                if (!restorePetsFromStorage()){
+                    // 动态获取当前选择的模型
+                    fetch('/api/spine_model/current')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.skel_path && data.atlas_path) {
+                                setTimeout(() => loadMovingSpineModel(data.skel_path, data.atlas_path), 100);
+                            } else {
+                                // 回退到模板变量（若存在）
+                                const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                                const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                                if (skelUrl && atlasUrl) {
+                                    setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('获取当前模型失败:', error);
+                            // 回退到模板变量（若存在）
+                            const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                            const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                            if (skelUrl && atlasUrl) {
+                                setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
+                            }
+                        });
+                }
+            } else {
+                container.style.display = 'none';
+                fixedPet.style.display = 'block';
+                stopMoving();
+            }
+        };
+
+        window.refreshMovingPet = function(newSkelUrl, newAtlasUrl) {
+             if (document.getElementById('spine-moving-pet').style.display !== 'none') {
+                 // 重置每只宠物的初始化交互标志，确保刷新后也会执行初始interact动作
+                 movingPets.forEach(p => p.hasInitialInteract = false);
+                 loadMovingSpineModel(newSkelUrl, newAtlasUrl);
+             }
+         };
+         
+         // 页面加载时检查宠物模式设置
+         document.addEventListener('DOMContentLoaded', function() {
+             const savedMode = localStorage.getItem('petMode');
+             if (savedMode === 'moving') {
+                 // 延迟一点时间确保所有脚本都加载完成
+                 setTimeout(() => {
+                     if (typeof window.toggleMovingPet === 'function') {
+                         // 动态获取当前模型并启用移动宠物
+                         fetch('/api/spine_model/current')
+                             .then(response => response.json())
+                             .then(data => {
+                                 if (data.success && data.skel_path && data.atlas_path) {
+                                     window.toggleMovingPet(true);
+                                 } else {
+                                     // 回退到模板变量
+                                     window.toggleMovingPet(true);
+                                 }
+                             })
+                             .catch(error => {
+                                 console.error('获取当前模型失败:', error);
+                                 // 回退到模板变量
+                                 window.toggleMovingPet(true);
+                             });
+                     }
+                 }, 500);
+             }
+         });
+     })();
+    </script>
+    
+    <!-- 全局背景设置加载 -->
+    <script>
+    // 加载背景设置
+    function loadBackgroundSettings() {
         const savedImage = localStorage.getItem('backgroundImage');
         const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
         
         if (savedImage) {
-            const opacityValue = savedOpacity / 100;
             document.documentElement.style.setProperty('--bg-image', `url(${savedImage})`);
-            document.documentElement.style.setProperty('--bg-opacity', opacityValue);
+            document.documentElement.style.setProperty('--bg-opacity', savedOpacity / 100);
         }
-
-        // 移动端侧边栏开关
-        const body = document.body;
-        const toggleBtn = document.querySelector('.mobile-menu-toggle');
-        const overlay = document.querySelector('.mobile-overlay');
-        const sidebar = document.querySelector('.sidebar');
-        
-        function closeSidebar() { body.classList.remove('sidebar-open'); }
-        function openSidebar() { body.classList.add('sidebar-open'); }
-        
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function() {
-                body.classList.toggle('sidebar-open');
-            });
-        }
-        if (overlay) {
-            overlay.addEventListener('click', closeSidebar);
-        }
-        // 当窗口尺寸变化时，如从横屏切回竖屏，确保关闭侧边栏
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 992) {
-                closeSidebar();
-            }
-        });
-    });
+    }
+    
+    // 页面加载时自动应用背景设置
+    document.addEventListener('DOMContentLoaded', loadBackgroundSettings);
     </script>
     
     {% block scripts %}{% endblock %}
