@@ -623,7 +623,8 @@
                             const idx = all.indexOf(chosen);
                             const next = all[(idx + 1) % all.length];
                             chosen = next;
-                            p.setAnimation(next, true);
+                            // 直接使用animationState而不是SpinePlayer的setAnimation，避免重新计算viewport导致缩放变化
+                            p.animationState.setAnimation(0, next, true);
                         };
                         container.addEventListener('click', handler);
                         window._spinePetClickHandler = handler;
