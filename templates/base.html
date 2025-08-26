@@ -1040,6 +1040,78 @@
             
             if (!canvas || !container) return;
             
+            // 防御性补丁：避免将undefined添加到容器，导致updateTransform读取visible报错
+            try {
+                const C = PIXI && PIXI.Container;
+                if (C && !C.prototype.__safeAddChildPatched) {
+                    const origAddChild = C.prototype.addChild;
+                    const origAddChildAt = C.prototype.addChildAt;
+                    const origRemoveChild = C.prototype.removeChild;
+                    const origRemoveChildAt = C.prototype.removeChildAt;
+                    const isValidChild = (c) => c && typeof c === 'object' && ('visible' in c);
+                    C.prototype.addChild = function(...children){
+                        const filtered = children.filter(isValidChild);
+                        if (filtered.length !== children.length) {
+                            try {
+                                const skipped = children.filter(c => !isValidChild(c));
+                                console.warn('PIXI addChild: 跳过无效子节点', {
+                                    skippedCount: children.length - filtered.length,
+                                    container: this && this.constructor ? this.constructor.name : 'Unknown',
+                                    skipped
+                                });
+                            } catch(_){ }
+                        }
+                        if (filtered.length === 0) return this;
+                        return origAddChild.apply(this, filtered);
+                    };
+                    if (typeof origAddChildAt === 'function') {
+                        C.prototype.addChildAt = function(child, index){
+                            if (!isValidChild(child)) {
+                                try { console.warn('PIXI addChildAt: 跳过无效子节点', { container: this && this.constructor ? this.constructor.name : 'Unknown' }); } catch(_){ }
+                                return this;
+                            }
+                            return origAddChildAt.call(this, child, index);
+                        };
+                    }
+                    if (typeof origRemoveChild === 'function') {
+                        C.prototype.removeChild = function(...children){
+                            const filtered = children.filter(Boolean);
+                            if (filtered.length === 0) return this;
+                            try { return origRemoveChild.apply(this, filtered); } catch(_) { return this; }
+                        };
+                    }
+                    if (typeof origRemoveChildAt === 'function') {
+                        C.prototype.removeChildAt = function(index){
+                            try {
+                                if (!this || !Array.isArray(this.children)) return this;
+                                if (index < 0 || index >= this.children.length) return this;
+                                return origRemoveChildAt.call(this, index);
+                            } catch(_) { return this; }
+                        };
+                    }
+                    // 在渲染前自动清理无效子节点，根治 updateTransform 访问 undefined.visible 的报错
+                    if (!C.prototype.__safeUpdateTransformPatched && typeof C.prototype.updateTransform === 'function') {
+                        const origUpdateTransform = C.prototype.updateTransform;
+                        C.prototype.updateTransform = function(...args) {
+                            try {
+                                if (this && Array.isArray(this.children)) {
+                                    for (let i = 0; i < this.children.length; i++) {
+                                        const ch = this.children[i];
+                                        if (!ch || typeof ch.visible === 'undefined') {
+                                            this.children.splice(i, 1);
+                                            i--;
+                                            continue;
+                                        }
+                                    }
+                                }
+                            } catch(_) { }
+                            return origUpdateTransform.apply(this, args);
+                        };
+                        C.prototype.__safeUpdateTransformPatched = true;
+                    }
+                    C.prototype.__safeAddChildPatched = true;
+                }
+            } catch(_){ }
             // 创建PIXI应用
             movingApp = new PIXI.Application({
                 view: canvas,
@@ -1201,7 +1273,8 @@
         
         function startMoving() {
             if (!currentMovingSpine || !isMoving) return;
-            movingApp.ticker.add(moveModel);
+            // 使用较高优先级，尽可能在渲染前完成清理与物理更新（PIXI v6: 使用 UPDATE_PRIORITY.HIGH，若不可用退化）
+        try { movingApp.ticker.add(moveModel, PIXI.UPDATE_PRIORITY ? PIXI.UPDATE_PRIORITY.HIGH : -25); } catch(_) { movingApp.ticker.add(moveModel); }
         }
         
         function stopMoving() {
@@ -1301,6 +1374,18 @@
         // 用惯性物理替换移动更新
         function moveModel() {
           if (!currentMovingSpine || !isMoving) return;
+          // 每帧清理舞台children中的无效元素，防止渲染访问undefined.visible
+          try {
+            if (movingApp && movingApp.stage && Array.isArray(movingApp.stage.children)) {
+              const arr = movingApp.stage.children;
+              for (let i = arr.length - 1; i >= 0; i--) {
+                const c = arr[i];
+                if (!c || typeof c !== 'object' || !('visible' in c)) {
+                  arr.splice(i, 1);
+                }
+              }
+            }
+          } catch(_) {}
           // 拖拽时不更新物理
           if (isDragging) return;
           const dt = (movingApp && movingApp.ticker && typeof movingApp.ticker.deltaMS === 'number') ? (movingApp.ticker.deltaMS / 1000) : (1/60);

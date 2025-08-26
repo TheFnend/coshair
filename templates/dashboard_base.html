@@ -744,14 +744,70 @@
                 const C = PIXI && PIXI.Container;
                 if (C && !C.prototype.__safeAddChildPatched) {
                     const origAddChild = C.prototype.addChild;
+                    const origAddChildAt = C.prototype.addChildAt;
+                    const origRemoveChild = C.prototype.removeChild;
+                    const origRemoveChildAt = C.prototype.removeChildAt;
+                    const isValidChild = (c) => c && typeof c === 'object' && ('visible' in c);
                     C.prototype.addChild = function(...children){
-                        const filtered = children.filter(c => c && typeof c === 'object' && 'visible' in c);
+                        const filtered = children.filter(isValidChild);
                         if (filtered.length !== children.length) {
-                            try { console.warn('PIXI addChild: 跳过无效子节点', { skipped: children.length - filtered.length }); } catch(_){ }
+                            try {
+                                const skipped = children.filter(c => !isValidChild(c));
+                                console.warn('PIXI addChild: 跳过无效子节点', {
+                                    skippedCount: children.length - filtered.length,
+                                    container: this && this.constructor ? this.constructor.name : 'Unknown',
+                                    skipped
+                                });
+                            } catch(_){ }
                         }
                         if (filtered.length === 0) return this;
                         return origAddChild.apply(this, filtered);
                     };
+                    if (typeof origAddChildAt === 'function') {
+                        C.prototype.addChildAt = function(child, index){
+                            if (!isValidChild(child)) {
+                                try { console.warn('PIXI addChildAt: 跳过无效子节点', { container: this && this.constructor ? this.constructor.name : 'Unknown' }); } catch(_){ }
+                                return this;
+                            }
+                            return origAddChildAt.call(this, child, index);
+                        };
+                    }
+                    if (typeof origRemoveChild === 'function') {
+                        C.prototype.removeChild = function(...children){
+                            const filtered = children.filter(Boolean);
+                            if (filtered.length === 0) return this;
+                            try { return origRemoveChild.apply(this, filtered); } catch(_) { return this; }
+                        };
+                    }
+                    if (typeof origRemoveChildAt === 'function') {
+                        C.prototype.removeChildAt = function(index){
+                            try {
+                                if (!this || !Array.isArray(this.children)) return this;
+                                if (index < 0 || index >= this.children.length) return this;
+                                return origRemoveChildAt.call(this, index);
+                            } catch(_) { return this; }
+                        };
+                    }
+                    // 在渲染前自动清理无效子节点，根治 updateTransform 访问 undefined.visible 的报错
+                    if (!C.prototype.__safeUpdateTransformPatched && typeof C.prototype.updateTransform === 'function') {
+                        const origUpdateTransform = C.prototype.updateTransform;
+                        C.prototype.updateTransform = function(...args) {
+                            try {
+                                if (this && Array.isArray(this.children)) {
+                                    for (let i = 0; i < this.children.length; i++) {
+                                        const ch = this.children[i];
+                                        if (!ch || typeof ch.visible === 'undefined') {
+                                            this.children.splice(i, 1);
+                                            i--;
+                                            continue;
+                                        }
+                                    }
+                                }
+                            } catch(_) { }
+                            return origUpdateTransform.apply(this, args);
+                        };
+                        C.prototype.__safeUpdateTransformPatched = true;
+                    }
                     C.prototype.__safeAddChildPatched = true;
                 }
             } catch(_){ }
@@ -988,7 +1044,8 @@
         function startMoving() {
             if (!movingApp || movingPets.length === 0) return;
             if (tickerRunning) return; // 防止重复添加导致速度翻倍
-            movingApp.ticker.add(moveModel);
+            // 使用较高优先级，尽可能在渲染前完成清理与物理更新（PIXI v6: -25 表示 HIGH 之上，若不支持则退化为普通 add）
+            try { movingApp.ticker.add(moveModel, PIXI.UPDATE_PRIORITY ? PIXI.UPDATE_PRIORITY.HIGH : -25); } catch(_) { movingApp.ticker.add(moveModel); }
             tickerRunning = true;
         }
         
@@ -1130,6 +1187,11 @@
                     if (pet.spine.skeleton) {
                         pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
                     }
+                    // 显式标记睡眠状态并清零速度，避免残余速度导致朝向被翻转
+                    pet.isSleeping = true;
+                    if (typeof pet.vx === 'number') pet.vx = 0;
+                    if (typeof pet.vy === 'number') pet.vy = 0;
+                    pet.moveDirection = 0;
                     showSleepBubble(pet); // 显示睡觉图标
                     break;
                 case 'move_left':
@@ -1207,6 +1269,37 @@
         
         function moveModel() {
             if (!movingApp || movingPets.length === 0) return;
+            
+            // 每帧深度清理显示树中的无效元素，防止渲染访问 undefined.visible
+            try {
+                if (movingApp && movingApp.stage) {
+                    const stack = [movingApp.stage];
+                    const visited = new Set();
+                    while (stack.length) {
+                        const container = stack.pop();
+                        if (!container || typeof container !== 'object' || !Array.isArray(container.children)) continue;
+                        if (visited.has(container)) continue;
+                        visited.add(container);
+                        const arr = container.children;
+                        for (let i = arr.length - 1; i >= 0; i--) {
+                            const c = arr[i];
+                            // 过滤无效/未初始化的子节点
+                            if (!c || typeof c !== 'object' || !('visible' in c)) {
+                                arr.splice(i, 1);
+                                continue;
+                            }
+                            // 纠正 parent 引用异常（尽量修复而非抛错）
+                            if (c.parent !== container) {
+                                try { c.parent = container; } catch(_) {}
+                            }
+                            // 继续下钻
+                            if (c && typeof c === 'object' && Array.isArray(c.children)) {
+                                stack.push(c);
+                            }
+                        }
+                    }
+                }
+            } catch(_) {}
             
             const dt = (movingApp && movingApp.ticker && typeof movingApp.ticker.deltaMS === 'number') ? (movingApp.ticker.deltaMS / 1000) : (1/60);
             const groundY = movingApp.screen.height;
@@ -1286,8 +1379,8 @@
                         pet.vx = -100;
                     }
                 }
-                // 根据速度翻转朝向
-                if (pet.spine.skeleton) {
+                // 根据速度翻转朝向（睡眠时不翻转，锁定朝右）
+                if (pet.spine.skeleton && !pet.isSleeping) {
                     if (pet.vx > 5) pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
                     else if (pet.vx < -5) pet.spine.skeleton.scaleX = -Math.abs(pet.spine.skeleton.scaleX);
                 }
@@ -1608,7 +1701,16 @@
             if (!pet || !pet.spine || !movingApp || !movingApp.stage) return;
             
             try {
-                // 如果已经有睡觉图标，先移除
+                // 如果已有有效的睡觉图标，直接确保在舞台上并返回（幂等）
+                if (pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                    if (!movingApp.stage.children.includes(pet.sleepBubble)) {
+                        try { movingApp.stage.addChild(pet.sleepBubble); } catch(_) {}
+                    }
+                    pet.isSleeping = true;
+                    return;
+                }
+                
+                // 如果已经有睡觉图标引用但无效，先尝试清理
                 hideSleepBubble(pet);
                 
                 // 创建睡觉图标
@@ -1649,7 +1751,9 @@
             }
             
             // 添加轻微的浮动动画
-            pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
+            if (pet.sleepBubble) {
+                pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
+            }
         }
         
         function hideSleepBubble(pet) {
@@ -1696,6 +1800,12 @@
                     if (pet.sleepBubble.animationOffset !== undefined) {
                         const time = Date.now() * 0.002;
                         pet.sleepBubble.y += Math.sin(time + pet.sleepBubble.animationOffset) * 3;
+                    }
+                }
+                // 确保仍然在舞台上
+                if (movingApp && movingApp.stage && pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                    if (!movingApp.stage.children.includes(pet.sleepBubble)) {
+                        try { movingApp.stage.addChild(pet.sleepBubble); } catch(_) {}
                     }
                 }
             } catch (error) {
