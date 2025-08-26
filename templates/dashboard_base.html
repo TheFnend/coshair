@@ -739,6 +739,22 @@
                 return;
             }
             
+            // 防御性补丁：避免将undefined添加到容器，导致updateTransform读取visible报错
+            try {
+                const C = PIXI && PIXI.Container;
+                if (C && !C.prototype.__safeAddChildPatched) {
+                    const origAddChild = C.prototype.addChild;
+                    C.prototype.addChild = function(...children){
+                        const filtered = children.filter(c => c && typeof c === 'object' && 'visible' in c);
+                        if (filtered.length !== children.length) {
+                            try { console.warn('PIXI addChild: 跳过无效子节点', { skipped: children.length - filtered.length }); } catch(_){ }
+                        }
+                        if (filtered.length === 0) return this;
+                        return origAddChild.apply(this, filtered);
+                    };
+                    C.prototype.__safeAddChildPatched = true;
+                }
+            } catch(_){ }
             // 创建PIXI应用
             movingApp = new PIXI.Application({
                 width: window.innerWidth,
@@ -892,8 +908,10 @@
                         const pet = new MovingPet(spineObject, skelUrl, atlasUrl);
                         pet.isMoving = true;
                         
-                        // 添加到舞台
-                        movingApp.stage.addChild(spineObject);
+                        // 添加到舞台（防御：确保对象有效）
+                        if (movingApp && movingApp.stage && spineObject) {
+                            movingApp.stage.addChild(spineObject);
+                        }
                         
                         // 设置模型为可交互
                         spineObject.interactive = true;
@@ -1595,8 +1613,8 @@
                 
                 // 创建睡觉图标
                 const texture = PIXI.Texture.from('/static/sleep-bubble.svg');
-                if (!texture || !texture.valid) {
-                    console.warn('Sleep bubble texture not loaded');
+                if (!texture || !texture.baseTexture) {
+                    console.warn('Sleep bubble texture not available');
                     return;
                 }
                 
@@ -1607,14 +1625,23 @@
                 pet.sleepBubble.anchor.set(0.5, 1); // 底部中心锚点
                 pet.sleepBubble.scale.set(0.8); // 缩放到合适大小
                 pet.sleepBubble.visible = true; // 确保visible属性存在
+                pet.sleepBubble.zIndex = 10000; // 置顶显示
+                if (movingApp.stage && movingApp.stage.sortableChildren !== true) {
+                    movingApp.stage.sortableChildren = true;
+                }
                 
                 // 设置位置（宠物上方）
                 updateSleepBubblePosition(pet);
                 
                 // 安全地添加到舞台
-                if (movingApp.stage && pet.sleepBubble && !pet.sleepBubble.destroyed) {
+                if (movingApp && movingApp.stage && pet.sleepBubble && !pet.sleepBubble.destroyed) {
                     movingApp.stage.addChild(pet.sleepBubble);
                     pet.isSleeping = true;
+                }
+                
+                // 轻微浮动动画偏移
+                if (pet.sleepBubble) {
+                    pet.sleepBubble.animationOffset = Math.random() * Math.PI * 2;
                 }
             } catch (error) {
                 console.error('Error creating sleep bubble:', error);
@@ -1686,7 +1713,12 @@
         // 持久化与变更事件派发
         function savePetsToStorage(){
             try {
-                const list = movingPets.map(p=>({ skelUrl: p.skelUrl, atlasUrl: p.atlasUrl }));
+                const list = movingPets.map(p=>({ 
+                    skelUrl: p.skelUrl, 
+                    atlasUrl: p.atlasUrl,
+                    currentAction: p.currentAction,
+                    isSleeping: p.isSleeping
+                }));
                 localStorage.setItem('movingPets', JSON.stringify(list));
             } catch(e) { console.warn('保存移动宠物状态失败', e); }
         }
