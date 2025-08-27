@@ -21,6 +21,7 @@ import uuid
 import tempfile
 import urllib.request as urlrequest
 from urllib.parse import quote
+from werkzeug.utils import secure_filename
 
 # 创建Flask应用实例
 app = Flask(__name__)
@@ -29,6 +30,11 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'  # 用于会话加密
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coswig_orders.db'  # 数据库连接
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # 禁用SQLAlchemy事件系统
+# 允许上传的图片配置与大小限制（20MB）
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads', 'backgrounds')
+ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # 启用CORS支持，允许跨域请求
 CORS(app)
@@ -307,6 +313,70 @@ def api_update_order(id):
         return jsonify({'success': True, 'message': '更新成功'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
+
+# Duplicate of /api/batch_delete removed to avoid endpoint conflict
+
+@app.route('/api/upload_background', methods=['POST'])
+def api_upload_background():
+    """
+    上传背景图片并返回可访问的静态URL，避免localStorage容量限制。
+    前端使用multipart/form-data字段名 file。
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '未选择文件'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '未选择文件'}), 400
+        # 校验扩展名
+        _, ext = os.path.splitext(file.filename)
+        ext = ext.lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            return jsonify({'success': False, 'message': '仅支持图片文件（png/jpg/jpeg/gif/webp）'}), 400
+        # 生成安全文件名
+        unique_name = f"bg_{uuid.uuid4().hex}{ext}"
+        safe_name = secure_filename(unique_name)
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
+        # 保存文件
+        file.save(save_path)
+        # 生成静态URL
+        static_url = url_for('static', filename=f"uploads/backgrounds/{safe_name}")
+        return jsonify({'success': True, 'url': static_url})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'上传失败：{str(e)}'}), 500
+
+# 重复定义的 /api/update_order 已移除，避免端点冲突
+# @app.route('/api/update_order/<int:id>', methods=['POST'])
+# def api_update_order(id):
+#     """
+#     更新订单API接口
+#     
+#     支持部分字段更新，用于前端快速操作
+#     """
+#     order = Order.query.get_or_404(id)
+#     data = request.get_json()
+#     
+#     try:
+#         # 根据传入的数据更新相应字段
+#         if 'deposit_paid' in data:
+#             order.deposit_paid = data['deposit_paid']
+#         if 'blank_purchased' in data:
+#             order.blank_purchased = data['blank_purchased']
+#         if 'status' in data:
+#             order.status = data['status']
+#         if 'contact' in data:
+#             order.contact = data['contact']
+#         if 'shipping_included' in data:
+#             order.shipping_included = data['shipping_included']
+#         if 'cake_box' in data:
+#             order.cake_box = data['cake_box']
+#         if 'needed_date' in data:
+#             order.needed_date = datetime.strptime(data['needed_date'], '%Y-%m-%d').date()
+#         
+#         db.session.commit()
+#         return jsonify({'success': True, 'message': '更新成功'})
+#     except Exception as e:
+#         return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/api/batch_delete', methods=['POST'])
 def api_batch_delete():

@@ -479,29 +479,65 @@ async function importData() {
 // ==================== 背景设置功能 ====================
 
 // 处理背景图片上传
-function handleBackgroundUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const imageUrl = e.target.result;
-            setBackgroundImage(imageUrl);
-            updatePreview(imageUrl);
-            
-            // 保存到localStorage
-            localStorage.setItem('backgroundImage', imageUrl);
-            localStorage.setItem('backgroundOpacity', document.getElementById('backgroundOpacity').value);
-            
-            showToast('背景图片已设置', 'success');
-        };
-        reader.readAsDataURL(file);
+async function handleBackgroundUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    // 简单类型校验
+    if (!/^image\//i.test(file.type)) {
+        showToast('请选择图片文件', 'warning');
+        return;
+    }
+
+    try {
+        showToast('正在上传背景图片，请稍候…', 'info');
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload_background', {
+            method: 'POST',
+            body: formData
+        });
+
+        let result;
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+            result = await res.json();
+        } else {
+            // 非JSON响应（如413限流页），直接取文本
+            const text = await res.text();
+            if (!res.ok) {
+                throw new Error(text || res.statusText || '上传失败');
+            }
+            // 若意外返回非JSON但状态OK，则兜底
+            result = { success: true, url: text };
+        }
+
+        if (!res.ok || !result.success) {
+            throw new Error((result && result.message) || res.statusText || '上传失败');
+        }
+
+        const imageUrl = result.url;
+        setBackgroundImage(imageUrl);
+        updatePreview(imageUrl);
+        // 保存到localStorage（仅保存URL，不再保存base64，避免容量限制）
+        localStorage.setItem('backgroundImage', imageUrl);
+        localStorage.setItem('backgroundOpacity', document.getElementById('backgroundOpacity').value);
+        showToast('背景图片已设置', 'success');
+    } catch (err) {
+        // 常见大文件错误（413）处理提示
+        const msg = String(err && err.message ? err.message : err);
+        if (/413/.test(msg) || /Request Entity Too Large/i.test(msg)) {
+            showToast('上传失败：图片超过服务器限制，请压缩后重试或联系管理员调整限制', 'error');
+        } else {
+            showToast('上传失败：' + msg, 'error');
+        }
     }
 }
 
 // 设置背景图片
 function setBackgroundImage(imageUrl) {
     const opacity = document.getElementById('backgroundOpacity').value / 100;
-    document.documentElement.style.setProperty('--bg-image', `url(${imageUrl})`);
+    document.documentElement.style.setProperty('--bg-image', `url("${imageUrl}")`);
     document.documentElement.style.setProperty('--bg-opacity', opacity);
 }
 
@@ -559,8 +595,7 @@ function resetBackground() {
 function updatePreview(imageUrl) {
     const preview = document.getElementById('backgroundPreview');
     const opacity = document.getElementById('backgroundOpacity').value / 100;
-    
-    preview.style.backgroundImage = `url(${imageUrl})`;
+    preview.style.backgroundImage = `url("${imageUrl}")`;
     preview.style.opacity = opacity;
     preview.innerHTML = `
         <div class="preview-overlay">
