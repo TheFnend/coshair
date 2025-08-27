@@ -364,6 +364,28 @@
                                 </button>
                             </div>
                             
+                            <!-- 移动宠物缩放设置（仅移动模式下显示） -->
+                            <div class="mt-3" id="movingPetScaleSettings" style="display: none;">
+                                <label class="form-label text-info">
+                                    <i class="bi bi-arrows-angle-expand"></i> 移动宠物缩放设置
+                                </label>
+                                <div class="mt-2">
+                                    <label class="form-label small">模型缩放</label>
+                                    <input type="range" class="form-range" id="movingPetScaleSlider" min="0.3" max="2.0" step="0.05" value="1.0">
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">0.3x</small>
+                                        <small class="text-primary" id="movingPetScaleValue">1.0x</small>
+                                        <small class="text-muted">2.0x</small>
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block">调整移动宠物的模型缩放比例，更改会立即应用到所有移动宠物</small>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="resetMovingPetScaleBtn">
+                                        <i class="bi bi-arrow-counterclockwise"></i> 重置默认
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <!-- 多宠物管理（仅移动模式下显示） -->
                             <div class="mt-3" id="multiPetControls" style="display: none;">
                                 <label class="form-label text-info">
@@ -1056,6 +1078,10 @@ function initPetModeSettings() {
         const isMoving = (localStorage.getItem('petMode') || 'fixed') === 'moving';
         if (controls) controls.style.display = isMoving ? 'block' : 'none';
         if (collisionSettings) collisionSettings.style.display = isMoving ? 'block' : 'none';
+        
+        // 控制移动宠物缩放设置的显示
+        const movingPetScaleSettings = document.getElementById('movingPetScaleSettings');
+        if (movingPetScaleSettings) movingPetScaleSettings.style.display = isMoving ? 'block' : 'none';
     };
     
     // 初始化碰撞设置
@@ -1230,11 +1256,91 @@ function initPetSizeSettings() {
     }
 }
 
+// ==================== 移动宠物缩放设置 ====================
+function initMovingPetScaleSettings() {
+    const scaleSlider = document.getElementById('movingPetScaleSlider');
+    const scaleValue = document.getElementById('movingPetScaleValue');
+    const resetBtn = document.getElementById('resetMovingPetScaleBtn');
+    const scaleSettings = document.getElementById('movingPetScaleSettings');
+    
+    if (!scaleSlider) return;
+    
+    // 从localStorage加载保存的设置
+    const savedScale = localStorage.getItem('petMovingScale') || '1.0';
+    
+    scaleSlider.value = savedScale;
+    
+    // 更新显示值
+    function updateDisplayValue() {
+        scaleValue.textContent = parseFloat(scaleSlider.value).toFixed(1) + 'x';
+    }
+    
+    updateDisplayValue();
+    
+    // 应用移动宠物缩放设置
+    function applyMovingPetScale() {
+        const scale = parseFloat(scaleSlider.value);
+        
+        // 保存到localStorage
+        localStorage.setItem('petMovingScale', scale.toString());
+        
+        // 通知移动宠物系统更新缩放
+        if (typeof window.updateMovingPetScale === 'function') {
+            window.updateMovingPetScale(scale);
+        }
+    }
+    
+    // 控制显隐（仅移动模式显示）
+    function updateMovingScaleSettingsVisibility() {
+        const mode = localStorage.getItem('petMode') || 'fixed';
+        if (scaleSettings) {
+            scaleSettings.style.display = mode === 'moving' ? 'block' : 'none';
+        }
+    }
+    
+    updateMovingScaleSettingsVisibility();
+    
+    // 绑定滑块事件
+    let updateTimeout;
+    function handleSliderChange() {
+        updateDisplayValue();
+        // 防抖：延迟应用设置，避免频繁更新
+        clearTimeout(updateTimeout);
+        updateTimeout = setTimeout(applyMovingPetScale, 300);
+    }
+    
+    scaleSlider.addEventListener('input', handleSliderChange);
+    
+    // 重置按钮
+    if (resetBtn && !resetBtn._boundReset) {
+        resetBtn.addEventListener('click', function() {
+            scaleSlider.value = '1.0';
+            updateDisplayValue();
+            applyMovingPetScale();
+            showToast('已重置移动宠物缩放为默认值', 'success');
+        });
+        resetBtn._boundReset = true;
+    }
+    
+    // 监听模式切换，更新显隐
+    const fixedRadio = document.getElementById('petModeFixed');
+    const movingRadio = document.getElementById('petModeMoving');
+    if (fixedRadio && !fixedRadio._movingScaleSettings) {
+        fixedRadio.addEventListener('change', updateMovingScaleSettingsVisibility);
+        fixedRadio._movingScaleSettings = true;
+    }
+    if (movingRadio && !movingRadio._movingScaleSettings) {
+        movingRadio.addEventListener('change', updateMovingScaleSettingsVisibility);
+        movingRadio._movingScaleSettings = true;
+    }
+}
+
 // 页面加载完成后初始化所有设置
 window.addEventListener('DOMContentLoaded', function() {
     loadSpineModels();
     initPetModeSettings();
     initPetSizeSettings(); // 新增：初始化宠物尺寸设置
+    initMovingPetScaleSettings(); // 新增：初始化移动宠物缩放设置
     bindMultiPetList();
     renderMovingPets();
 });

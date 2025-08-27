@@ -998,10 +998,16 @@
                         // 检查模型名称是否包含#字符，带#的模型通常较小需要放大
                         const modelName = skelUrl.split('/').pop() || '';
                         const hasHashInName = modelName.includes('#');
-                        const scale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3,0.5);
+                        const autoScale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3,0.5);
                         
-                        spineObject.scale.set(scale);
-                        console.log(`模型缩放: ${modelName}, 包含#: ${hasHashInName}, 缩放比例: ${scale.toFixed(2)}`);
+                        // 读取用户自定义的移动宠物缩放设置
+                         const userScale = localStorage.getItem('petMovingScale');
+                         const finalScale = userScale ? parseFloat(userScale) * autoScale : autoScale;
+                        
+                        spineObject.scale.set(finalScale);
+                        console.log(`模型缩放: ${modelName}, 包含#: ${hasHashInName}, 自动缩放: ${autoScale.toFixed(2)}, 用户缩放: ${userScale || '1.0'}, 最终缩放: ${finalScale.toFixed(2)}`);
+                    
+                
                         
                         // 缩放后重新调整位置：水平居中，底部精确贴合
                         spineObject.x = movingApp.screen.width / 2;
@@ -1919,6 +1925,42 @@
         window.updateCollisionSettings = function(enabled) {
             collisionEnabled = enabled;
             console.log('宠物碰撞设置已更新:', enabled ? '启用' : '禁用');
+        };
+        
+        // 移动宠物缩放控制函数
+        window.updateAllMovingPetsScale = function(userScale) {
+            movingPets.forEach(pet => {
+                if (pet && pet.spine) {
+                    try {
+                        // 获取当前的自动缩放基数（从原始bounds计算）
+                        const modelName = pet.skelUrl.split('/').pop() || '';
+                        const hasHashInName = modelName.includes('#');
+                        
+                        // 重新计算基础缩放（需要临时重置为1来获取原始bounds）
+                        const currentScale = pet.spine.scale.x;
+                        pet.spine.scale.set(1);
+                        const bounds = pet.spine.getBounds();
+                        const scaleX = (movingApp.screen.width * 0.8) / bounds.width;
+                        const scaleY = (movingApp.screen.height * 0.8) / bounds.height;
+                        const baseScale = Math.min(scaleX, scaleY);
+                        const autoScale = hasHashInName ? Math.min(baseScale * 2.5, 3) : Math.min(baseScale, 0.3, 0.5);
+                        
+                        // 应用用户缩放
+                        const finalScale = userScale * autoScale;
+                        pet.spine.scale.set(finalScale);
+                        
+                        console.log(`更新宠物缩放: ${modelName}, 用户缩放: ${userScale}, 最终缩放: ${finalScale.toFixed(2)}`);
+                    } catch (e) {
+                        console.warn('更新宠物缩放失败:', e);
+                    }
+                }
+            });
+        };
+        
+        // 简化的移动宠物缩放更新函数，供设置页面调用
+        window.updateMovingPetScale = function(scale) {
+            console.log('更新移动宠物缩放:', scale);
+            window.updateAllMovingPetsScale(scale);
         };
         
         // 初始化碰撞设置（从localStorage读取）
