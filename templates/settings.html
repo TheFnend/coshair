@@ -418,7 +418,7 @@
 <script>
 // 页面加载时恢复设置
 document.addEventListener('DOMContentLoaded', function() {
-    loadBackgroundSettings();
+    loadBackgroundSettingsPage();
     loadSystemSettings();
 });
 
@@ -571,18 +571,20 @@ function updatePreview(imageUrl) {
 }
 
 // 加载背景设置
-function loadBackgroundSettings() {
+function loadBackgroundSettingsPage() {
     const savedImage = localStorage.getItem('backgroundImage');
     const savedOpacity = localStorage.getItem('backgroundOpacity') || '50';
-    
+
+    // 先恢复滑块与显示值，确保后续预览与CSS变量使用的是正确透明度
+    const opacitySlider = document.getElementById('backgroundOpacity');
+    const opacityValue = document.getElementById('opacityValue');
+    if (opacitySlider) opacitySlider.value = savedOpacity;
+    if (opacityValue) opacityValue.textContent = savedOpacity + '%';
+
     if (savedImage) {
         setBackgroundImage(savedImage);
         updatePreview(savedImage);
     }
-    
-    // 更新滑块值
-    document.getElementById('backgroundOpacity').value = savedOpacity;
-    document.getElementById('opacityValue').textContent = savedOpacity + '%';
 }
 
 // ==================== 系统设置功能 ====================
