@@ -12,6 +12,8 @@
 {% block page_title %}系统设置{% endblock %}
 
 {% block extra_css %}
+<!-- Cropper.js CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
 <style>
 .settings-section {
     background: rgba(255, 255, 255, 0.75);
@@ -479,6 +481,61 @@
     </div>
 </div>
 
+<!-- 图片裁剪模态框 -->
+<div class="modal fade" id="imageCropModal" tabindex="-1" aria-labelledby="imageCropModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageCropModalLabel">
+                    <i class="bi bi-crop"></i> 裁剪背景图片
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <small class="text-muted">拖拽调整裁剪区域，建议裁剪为16:9比例以获得最佳显示效果</small>
+                </div>
+                <div class="crop-container" style="max-height: 400px; overflow: hidden;">
+                    <img id="cropImage" style="max-width: 100%; display: block;">
+                </div>
+                <div class="mt-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label small">裁剪比例</label>
+                            <select class="form-select form-select-sm" id="cropAspectRatio">
+                                <option value="0">自由裁剪</option>
+                                <option value="1.7777777777777777" selected>16:9 (推荐)</option>
+                                <option value="1.3333333333333333">4:3</option>
+                                <option value="1">1:1 (正方形)</option>
+                                <option value="0.5625">9:16 (竖屏)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">图片质量</label>
+                            <select class="form-select form-select-sm" id="cropQuality">
+                                <option value="0.9" selected>高质量 (90%)</option>
+                                <option value="0.8">标准质量 (80%)</option>
+                                <option value="0.7">压缩质量 (70%)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> 取消
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmCrop">
+                    <i class="bi bi-check-lg"></i> 确认裁剪并上传
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cropper.js JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
 <script>
 // 页面加载时恢复设置
 document.addEventListener('DOMContentLoaded', function() {
@@ -542,8 +599,8 @@ async function importData() {
 
 // ==================== 背景设置功能 ====================
 
-// 处理背景图片上传
-async function handleBackgroundUpload(event) {
+// 处理背景图片上传 - 显示裁剪界面
+function handleBackgroundUpload(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
@@ -553,48 +610,196 @@ async function handleBackgroundUpload(event) {
         return;
     }
 
+    // 检查文件大小（限制为10MB）
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('图片文件过大，请选择小于10MB的图片', 'warning');
+        return;
+    }
+
+    // 读取文件并显示裁剪界面
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        showImageCropModal(e.target.result, file);
+    };
+    reader.readAsDataURL(file);
+
+    // 清空input，允许重复选择同一文件
+    event.target.value = '';
+}
+
+// 显示图片裁剪模态框
+function showImageCropModal(imageSrc, originalFile) {
+    const modal = document.getElementById('imageCropModal');
+    const cropImage = document.getElementById('cropImage');
+    
+    // 设置图片源
+    cropImage.src = imageSrc;
+    
+    // 存储原始文件信息
+    window.currentCropFile = originalFile;
+    
+    // 显示模态框
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    
+    // 模态框显示后初始化裁剪器
+    modal.addEventListener('shown.bs.modal', function() {
+        initializeCropper();
+    }, { once: true });
+    
+    // 模态框隐藏时销毁裁剪器
+     modal.addEventListener('hidden.bs.modal', function() {
+         destroyCropper();
+     }, { once: true });
+ }
+
+// 裁剪器实例
+let cropper = null;
+
+// 初始化裁剪器
+function initializeCropper() {
+    const cropImage = document.getElementById('cropImage');
+    const aspectRatioSelect = document.getElementById('cropAspectRatio');
+    
+    if (cropper) {
+        cropper.destroy();
+    }
+    
+    // 获取初始宽高比
+    const initialAspectRatio = parseFloat(aspectRatioSelect.value) || NaN;
+    
+    cropper = new Cropper(cropImage, {
+        aspectRatio: initialAspectRatio,
+        viewMode: 1,
+        dragMode: 'move',
+        autoCropArea: 0.8,
+        restore: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+        responsive: true,
+        checkOrientation: false
+    });
+    
+    // 绑定宽高比变更事件
+    aspectRatioSelect.addEventListener('change', function() {
+        const newAspectRatio = parseFloat(this.value) || NaN;
+        if (cropper) {
+            cropper.setAspectRatio(newAspectRatio);
+        }
+    });
+    
+    // 绑定确认裁剪按钮事件
+    const confirmBtn = document.getElementById('confirmCrop');
+    confirmBtn.onclick = confirmCrop;
+}
+
+// 销毁裁剪器
+function destroyCropper() {
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
+    
+    // 清理事件监听器
+    const aspectRatioSelect = document.getElementById('cropAspectRatio');
+    const confirmBtn = document.getElementById('confirmCrop');
+    
+    if (aspectRatioSelect) {
+        aspectRatioSelect.removeEventListener('change', arguments.callee);
+    }
+    
+    if (confirmBtn) {
+        confirmBtn.onclick = null;
+    }
+}
+
+// 确认裁剪并上传
+async function confirmCrop() {
+    if (!cropper || !window.currentCropFile) {
+        showToast('裁剪器未初始化或文件丢失', 'error');
+        return;
+    }
+    
     try {
-        showToast('正在上传背景图片，请稍候…', 'info');
+        // 显示加载状态
+        const confirmBtn = document.getElementById('confirmCrop');
+        const originalText = confirmBtn.innerHTML;
+        confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 处理中...';
+        confirmBtn.disabled = true;
+        
+        // 获取裁剪质量设置
+        const quality = parseFloat(document.getElementById('cropQuality').value) || 0.9;
+        
+        // 获取裁剪后的canvas
+        const canvas = cropper.getCroppedCanvas({
+            maxWidth: 1920,
+            maxHeight: 1080,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+        
+        // 转换为blob
+        const blob = await new Promise(resolve => {
+            canvas.toBlob(resolve, 'image/jpeg', quality);
+        });
+        
+        // 创建FormData并上传
         const formData = new FormData();
-        formData.append('file', file);
+        const fileName = `cropped_${Date.now()}.jpg`;
+        formData.append('file', blob, fileName);
+        
         const res = await fetch('/api/upload_background', {
             method: 'POST',
             body: formData
         });
-
+        
         let result;
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('application/json')) {
             result = await res.json();
         } else {
-            // 非JSON响应（如413限流页），直接取文本
             const text = await res.text();
             if (!res.ok) {
                 throw new Error(text || res.statusText || '上传失败');
             }
-            // 若意外返回非JSON但状态OK，则兜底
             result = { success: true, url: text };
         }
-
+        
         if (!res.ok || !result.success) {
             throw new Error((result && result.message) || res.statusText || '上传失败');
         }
-
+        
+        // 应用背景图片
         const imageUrl = result.url;
         setBackgroundImage(imageUrl);
         updatePreview(imageUrl);
-        // 保存到localStorage（仅保存URL，不再保存base64，避免容量限制）
+        
+        // 保存到localStorage
         localStorage.setItem('backgroundImage', imageUrl);
         localStorage.setItem('backgroundOpacity', document.getElementById('backgroundOpacity').value);
-        showToast('背景图片已设置', 'success');
+        
+        // 关闭模态框
+        const modal = bootstrap.Modal.getInstance(document.getElementById('imageCropModal'));
+        modal.hide();
+        
+        showToast('背景图片已成功设置', 'success');
+        
     } catch (err) {
-        // 常见大文件错误（413）处理提示
         const msg = String(err && err.message ? err.message : err);
         if (/413/.test(msg) || /Request Entity Too Large/i.test(msg)) {
-            showToast('上传失败：图片超过服务器限制，请压缩后重试或联系管理员调整限制', 'error');
+            showToast('上传失败：图片超过服务器限制，请尝试降低图片质量', 'error');
         } else {
             showToast('上传失败：' + msg, 'error');
         }
+    } finally {
+        // 恢复按钮状态
+        const confirmBtn = document.getElementById('confirmCrop');
+        confirmBtn.innerHTML = '<i class="bi bi-check-lg"></i> 确认裁剪并上传';
+        confirmBtn.disabled = false;
     }
 }
 
