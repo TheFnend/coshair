@@ -315,6 +315,48 @@
                                 </div>
                             </div>
                             
+                            <!-- 固定宠物尺寸设置（仅固定模式下显示） -->
+                            <div class="mt-3" id="petSizeSettings">
+                                <label class="form-label">
+                                    <i class="bi bi-arrows-angle-expand"></i> 固定宠物尺寸设置
+                                </label>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label class="form-label small">宽度 (px)</label>
+                                        <input type="range" class="form-range" id="petWidthSlider" min="150" max="400" step="10" value="220">
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted">150</small>
+                                            <small class="text-primary" id="petWidthValue">220</small>
+                                            <small class="text-muted">400</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">高度 (px)</label>
+                                        <input type="range" class="form-range" id="petHeightSlider" min="180" max="500" step="10" value="260">
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted">180</small>
+                                            <small class="text-primary" id="petHeightValue">260</small>
+                                            <small class="text-muted">500</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label class="form-label small">模型缩放</label>
+                                    <input type="range" class="form-range" id="petScaleSlider" min="0.3" max="1.5" step="0.05" value="1.0">
+                                    <div class="d-flex justify-content-between">
+                                        <small class="text-muted">0.3x</small>
+                                        <small class="text-primary" id="petScaleValue">1.0x</small>
+                                        <small class="text-muted">1.5x</small>
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block">调整固定宠物的容器大小和模型缩放比例，更改会立即生效</small>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="resetPetSizeBtn">
+                                        <i class="bi bi-arrow-counterclockwise"></i> 重置默认
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <!-- 刷新宠物按钮 -->
                             <div class="mt-3">
                                 <button type="button" class="btn btn-outline-success btn-sm" id="refreshPetBtn" title="刷新当前页面的宠物">
@@ -1078,5 +1120,123 @@ function initPetModeSettings() {
         movingRadio._boundMode = true;
     }
 }
+
+// ==================== 宠物尺寸设置 ====================
+function initPetSizeSettings() {
+    const widthSlider = document.getElementById('petWidthSlider');
+    const heightSlider = document.getElementById('petHeightSlider');
+    const scaleSlider = document.getElementById('petScaleSlider');
+    const widthValue = document.getElementById('petWidthValue');
+    const heightValue = document.getElementById('petHeightValue');
+    const scaleValue = document.getElementById('petScaleValue');
+    const resetBtn = document.getElementById('resetPetSizeBtn');
+    const sizeSettings = document.getElementById('petSizeSettings');
+    
+    if (!widthSlider || !heightSlider || !scaleSlider) return;
+    
+    // 从localStorage加载保存的设置
+    const savedWidth = localStorage.getItem('petFixedWidth') || '220';
+    const savedHeight = localStorage.getItem('petFixedHeight') || '260';
+    const savedScale = localStorage.getItem('petFixedScale') || '1.0';
+    
+    widthSlider.value = savedWidth;
+    heightSlider.value = savedHeight;
+    scaleSlider.value = savedScale;
+    
+    // 更新显示值
+    function updateDisplayValues() {
+        widthValue.textContent = widthSlider.value;
+        heightValue.textContent = heightSlider.value;
+        scaleValue.textContent = parseFloat(scaleSlider.value).toFixed(1) + 'x';
+    }
+    
+    updateDisplayValues();
+    
+    // 应用宠物尺寸设置
+    function applyPetSize() {
+        const width = parseInt(widthSlider.value);
+        const height = parseInt(heightSlider.value);
+        const scale = parseFloat(scaleSlider.value);
+        
+        // 保存到localStorage
+        localStorage.setItem('petFixedWidth', width.toString());
+        localStorage.setItem('petFixedHeight', height.toString());
+        localStorage.setItem('petFixedScale', scale.toString());
+        
+        // 应用到当前页面的宠物
+        const petContainer = document.getElementById('spine-pet');
+        if (petContainer) {
+            petContainer.style.width = width + 'px';
+            petContainer.style.height = height + 'px';
+        }
+        
+        // 通知宠物系统更新尺寸和缩放
+        if (typeof window.updatePetSize === 'function') {
+            window.updatePetSize(width, height, scale);
+        } else {
+            // 如果没有专门的更新函数，尝试刷新宠物
+            if (typeof window.refreshSpinePetFromServer === 'function') {
+                window.refreshSpinePetFromServer();
+            }
+        }
+    }
+    
+    // 控制显隐（仅固定模式显示）
+    function updateSizeSettingsVisibility() {
+        const mode = localStorage.getItem('petMode') || 'fixed';
+        if (sizeSettings) {
+            sizeSettings.style.display = mode === 'fixed' ? 'block' : 'none';
+        }
+    }
+    
+    updateSizeSettingsVisibility();
+    
+    // 绑定滑块事件
+    let updateTimeout;
+    function handleSliderChange() {
+        updateDisplayValues();
+        // 防抖：延迟应用设置，避免频繁更新
+        clearTimeout(updateTimeout);
+        updateTimeout = setTimeout(applyPetSize, 300);
+    }
+    
+    widthSlider.addEventListener('input', handleSliderChange);
+    heightSlider.addEventListener('input', handleSliderChange);
+    scaleSlider.addEventListener('input', handleSliderChange);
+    
+    // 重置按钮
+    if (resetBtn && !resetBtn._boundReset) {
+        resetBtn.addEventListener('click', function() {
+            widthSlider.value = '220';
+            heightSlider.value = '260';
+            scaleSlider.value = '1.0';
+            updateDisplayValues();
+            applyPetSize();
+            showToast('已重置宠物尺寸为默认值', 'success');
+        });
+        resetBtn._boundReset = true;
+    }
+    
+    // 监听模式切换，更新显隐
+    const fixedRadio = document.getElementById('petModeFixed');
+    const movingRadio = document.getElementById('petModeMoving');
+    if (fixedRadio && !fixedRadio._sizeSettings) {
+        fixedRadio.addEventListener('change', updateSizeSettingsVisibility);
+        fixedRadio._sizeSettings = true;
+    }
+    if (movingRadio && !movingRadio._sizeSettings) {
+        movingRadio.addEventListener('change', updateSizeSettingsVisibility);
+        movingRadio._sizeSettings = true;
+    }
+}
+
+// 页面加载完成后初始化所有设置
+window.addEventListener('DOMContentLoaded', function() {
+    loadSpineModels();
+    initPetModeSettings();
+    initPetSizeSettings(); // 新增：初始化宠物尺寸设置
+    bindMultiPetList();
+    renderMovingPets();
+});
 </script>
 {% endblock %}

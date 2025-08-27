@@ -591,13 +591,49 @@
 
         const containerId = 'spine-pet';
         const isMobile = document.body.classList.contains('android-device') || document.body.classList.contains('mobile-device');
-        const scale = isMobile ? 0.8 : 1;
-        const playerWidth = isMobile ? 180 : 220;
-        const playerHeight = isMobile ? 220 : 260;
+        
+        // 从localStorage读取用户自定义的宠物尺寸设置
+        const savedWidth = localStorage.getItem('petFixedWidth');
+        const savedHeight = localStorage.getItem('petFixedHeight');
+        const savedScale = localStorage.getItem('petFixedScale');
+        
+        const playerWidth = savedWidth ? parseInt(savedWidth) : (isMobile ? 180 : 220);
+        const playerHeight = savedHeight ? parseInt(savedHeight) : (isMobile ? 220 : 260);
+        const customScale = savedScale ? parseFloat(savedScale) : (isMobile ? 0.8 : 1);
+        
         const container = document.getElementById(containerId);
         if (!container) return;
         container.style.width = playerWidth + 'px';
         container.style.height = playerHeight + 'px';
+        
+        // 暴露更新宠物尺寸的全局函数
+        window.updatePetSize = function(width, height, scale) {
+            if (container) {
+                container.style.width = width + 'px';
+                container.style.height = height + 'px';
+            }
+            // 直接更新当前宠物的缩放，无需重新加载
+            if (window._spinePetPlayer && window._spinePetPlayer.skeleton) {
+                try {
+                    window._spinePetPlayer.skeleton.scaleX = scale;
+                    window._spinePetPlayer.skeleton.scaleY = scale;
+                    if (typeof window._spinePetPlayer.skeleton.updateWorldTransform === 'function') {
+                        window._spinePetPlayer.skeleton.updateWorldTransform();
+                    }
+                } catch (e) {
+                    console.warn('直接更新宠物缩放失败，尝试重新加载:', e);
+                    // 如果直接更新失败，回退到重新加载
+                    if (typeof window.refreshSpinePetFromServer === 'function') {
+                        setTimeout(() => window.refreshSpinePetFromServer(), 100);
+                    }
+                }
+            } else {
+                // 如果宠物未加载，重新初始化
+                if (typeof window.refreshSpinePetFromServer === 'function') {
+                    setTimeout(() => window.refreshSpinePetFromServer(), 100);
+                }
+            }
+        };
 
         function initPlayer(skelUrl, atlasUrl){
             try {
@@ -609,8 +645,18 @@
                     alpha: true,
                     preserveDrawingBuffer: false,
                     premultipliedAlpha: true,
-                    scale,
                     success: (p) => {
+                        // 应用用户自定义的缩放
+                        try {
+                            if (p && p.skeleton) {
+                                p.skeleton.scaleX = customScale;
+                                p.skeleton.scaleY = customScale;
+                                if (typeof p.skeleton.updateWorldTransform === 'function') {
+                                    p.skeleton.updateWorldTransform();
+                                }
+                            }
+                        } catch (e) { console.warn('apply pet scale failed', e); }
+                        
                         const prefer = ['idle', 'Idle', 'stand', 'Stand', 'breath', 'idle_1'];
                         const all = p.animationState.data.skeletonData.animations.map(a=>a.name);
                         let chosen = all.find(a=>prefer.includes(a)) || all[0];
