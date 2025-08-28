@@ -273,18 +273,33 @@
                     </label>
                     <div class="row">
                         <div class="col-md-6">
-                            <!-- 搜索和刷新区域 -->
-                            <div class="mb-3 d-flex gap-2">
-                                <div class="flex-grow-1">
-                                    <input type="text" class="form-control" id="spineModelSearch" placeholder="搜索模型名称...">
-                                </div>
+                            <!-- 刷新按钮 -->
+                            <div class="mb-3 d-flex justify-content-end">
                                 <button type="button" class="btn btn-primary" id="refreshModelsBtn" title="刷新模型列表">
                                     <i class="bi bi-arrow-clockwise"></i> 刷新
                                 </button>
                             </div>
-                            <select class="form-select" id="spineModelSelect">
-                                <option value="">正在加载模型列表...</option>
-                            </select>
+                            
+                            <!-- 模型分类选择 -->
+                            <div class="mb-3">
+                                <label class="form-label">模型分类</label>
+                                <select class="form-select" id="spineModelFolderSelect">
+                                    <option value="">正在加载分类列表...</option>
+                                </select>
+                            </div>
+                            
+                            <!-- 模型选择 -->
+                            <div class="mb-3">
+                                <label class="form-label">模型</label>
+                                <div class="d-flex gap-2">
+                                    <div class="flex-grow-1">
+                                        <input type="text" class="form-control" id="spineModelSearch" placeholder="请先选择模型分类..." disabled>
+                                    </div>
+                                </div>
+                                <select class="form-select mt-2" id="spineModelSelect" disabled>
+                                    <option value="">请先选择模型分类</option>
+                                </select>
+                            </div>
                             <small class="text-muted">选择您喜欢的宠物模型，更改会立即应用到所有页面</small>
                             <!-- 宠物模式切换 -->
                             <div class="mt-3">
@@ -981,38 +996,192 @@ function showToast(message, type = 'info') {
 }
 
 // ==================== 宠物模型选择 ====================
+let spineModelsData = {}; // 存储按文件夹分组的模型数据
+
 async function loadSpineModels() {
     try {
-        const select = document.getElementById('spineModelSelect');
+        const folderSelect = document.getElementById('spineModelFolderSelect');
+        const modelSelect = document.getElementById('spineModelSelect');
+        const searchInput = document.getElementById('spineModelSearch');
+        
+        // 加载模型数据
         const res = await fetch('/api/spine_models');
         const data = await res.json();
         if (!data.success) throw new Error(data.message || '加载失败');
+        
+        spineModelsData = data.folders;
+        
+        // 获取当前选中的模型
         const currentRes = await fetch('/api/spine_model/current');
         const current = await currentRes.json();
-        const currentId = current.success ? current.id : '113_cqbw';
-        select.innerHTML = '';
-        data.models.forEach(m => {
+        let currentFolder = 'models';
+        let currentId = '113_cqbw';
+        
+        if (current.success) {
+            currentFolder = current.folder || 'models';
+            currentId = current.id || '113_cqbw';
+        }
+        
+        // 填充文件夹选择器
+        folderSelect.innerHTML = '';
+        Object.keys(spineModelsData).forEach(folder => {
             const opt = document.createElement('option');
-            opt.value = m.id;
-            opt.textContent = m.name;
-            if (m.id === currentId) opt.selected = true;
-            opt.dataset.skel = m.skel_path;
-            opt.dataset.atlas = m.atlas_path;
-            select.appendChild(opt);
+            opt.value = folder;
+            opt.textContent = spineModelsData[folder].display_name;
+            if (folder === currentFolder) opt.selected = true;
+            folderSelect.appendChild(opt);
         });
+        
+        // 填充模型选择器
+        populateModelsForFolder(currentFolder, currentId);
+        
         // 初始化预览
         updateSpineModelPreview();
-        // 监听切换
-        if (!select._changeBound){
-            select.addEventListener('change', onSpineModelChange);
-            select._changeBound = true;
-        }
-        // 绑定搜索过滤
-        bindModelSearch();
-        // 绑定刷新按钮
+        
+        // 绑定事件
+        bindModelEvents();
         bindRefreshButtons();
     } catch (e) {
         showToast('加载模型列表失败：' + e.message, 'error');
+    }
+}
+
+function populateModelsForFolder(folder, selectedId = null) {
+    const modelSelect = document.getElementById('spineModelSelect');
+    const searchInput = document.getElementById('spineModelSearch');
+    
+    if (!folder || !spineModelsData[folder]) {
+        modelSelect.innerHTML = '<option value="">请先选择模型分类</option>';
+        modelSelect.disabled = true;
+        searchInput.disabled = true;
+        searchInput.placeholder = '请先选择模型分类...';
+        return;
+    }
+    
+    const models = spineModelsData[folder].models;
+    modelSelect.innerHTML = '';
+    modelSelect.disabled = false;
+    searchInput.disabled = false;
+    searchInput.placeholder = `搜索${spineModelsData[folder].display_name}...`;
+    
+    models.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        if (m.id === selectedId) opt.selected = true;
+        opt.dataset.folder = m.folder;
+        opt.dataset.skel = m.skel_path;
+        opt.dataset.atlas = m.atlas_path;
+        opt.dataset.preview = m.preview_path;
+        modelSelect.appendChild(opt);
+    });
+    
+    // 如果没有选中项，选中第一个
+    if (!selectedId && models.length > 0) {
+        modelSelect.selectedIndex = 0;
+    }
+}
+
+function bindModelEvents() {
+    const folderSelect = document.getElementById('spineModelFolderSelect');
+    const modelSelect = document.getElementById('spineModelSelect');
+    
+    // 文件夹选择变化
+    if (!folderSelect._changeBound) {
+        folderSelect.addEventListener('change', () => {
+            const folder = folderSelect.value;
+            populateModelsForFolder(folder);
+            updateSpineModelPreview();
+        });
+        folderSelect._changeBound = true;
+    }
+    
+    // 模型选择变化
+    if (!modelSelect._changeBound) {
+        modelSelect.addEventListener('change', onSpineModelChange);
+        modelSelect._changeBound = true;
+    }
+    
+    // 绑定搜索过滤
+    bindModelSearch();
+}
+
+function bindModelSearch() {
+    const input = document.getElementById('spineModelSearch');
+    const select = document.getElementById('spineModelSelect');
+    if (!input || !select || input._bound) return;
+    
+    input.addEventListener('input', () => {
+        const keyword = input.value.trim().toLowerCase();
+        const options = Array.from(select.options);
+        options.forEach(opt => {
+            const name = (opt.textContent || '').toLowerCase();
+            opt.hidden = keyword && !name.includes(keyword);
+        });
+        
+        // 若所有可见项中没有当前选中项，自动选中第一个可见项
+        const visible = options.filter(o => !o.hidden);
+        if (visible.length > 0 && visible.every(o => !o.selected)) {
+            visible[0].selected = true;
+            updateSpineModelPreview();
+        }
+    });
+    input._bound = true;
+}
+
+async function onSpineModelChange() {
+    const folderSelect = document.getElementById('spineModelFolderSelect');
+    const modelSelect = document.getElementById('spineModelSelect');
+    const folder = folderSelect.value;
+    const id = modelSelect.value;
+    
+    if (!folder || !id) return;
+    
+    try {
+        const res = await fetch('/api/spine_model/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder, id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const folderName = spineModelsData[folder]?.display_name || folder;
+            showToast(`已切换宠物模型为：${folderName} - ${id}`, 'success');
+            updateSpineModelPreview();
+        } else {
+            showToast(data.message || '切换失败', 'error');
+        }
+    } catch (e) {
+        showToast('切换失败：' + e.message, 'error');
+    }
+}
+
+function updateSpineModelPreview() {
+    const select = document.getElementById('spineModelSelect');
+    const preview = document.getElementById('spineModelPreview');
+    const opt = select.options[select.selectedIndex];
+    
+    if (!opt || !opt.dataset) {
+        preview.style.background = '#f8f9fa';
+        preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+        return;
+    }
+    
+    const previewPath = opt.dataset.preview;
+    if (previewPath) {
+        preview.style.background = `url(${safeUrl(previewPath)}) center/contain no-repeat`;
+        preview.innerHTML = '';
+    } else {
+        // 尝试使用atlas路径生成预览路径
+        const atlasPath = opt.dataset.atlas;
+        if (atlasPath) {
+            const previewPathFromAtlas = atlasPath.replace('.atlas', '.png');
+            preview.style.background = `url(${safeUrl(previewPathFromAtlas)}) center/contain no-repeat`;
+            preview.innerHTML = '';
+        } else {
+            preview.style.background = '#f8f9fa';
+            preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+        }
     }
 }
 
@@ -1106,61 +1275,18 @@ function bindRefreshButtons(){
 }
 
 function bindModelSearch(){
-    const input = document.getElementById('spineModelSearch');
-    const select = document.getElementById('spineModelSelect');
-    if (!input || !select || input._bound) return;
-    input.addEventListener('input', ()=>{
-        const keyword = input.value.trim().toLowerCase();
-        const options = Array.from(select.options);
-        options.forEach(opt=>{
-            const name = (opt.textContent || '').toLowerCase();
-            opt.hidden = keyword && !name.includes(keyword);
-        });
-        // 若所有可见项中没有当前选中项，自动选中第一个可见项
-        const visible = options.filter(o=>!o.hidden);
-        if (visible.length > 0 && visible.every(o=>!o.selected)){
-            visible[0].selected = true;
-            updateSpineModelPreview();
-        }
-    });
-    input._bound = true;
+    // 这个函数已经在bindModelEvents中重新实现了，这里保留空函数以避免错误
+    return;
 }
 
 async function onSpineModelChange() {
-    const select = document.getElementById('spineModelSelect');
-    const id = select.value;
-    if (!id) return;
-    try {
-        const res = await fetch('/api/spine_model/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('已切换宠物模型为：' + id, 'success');
-            updateSpineModelPreview();
-        } else {
-            showToast(data.message || '切换失败', 'error');
-        }
-    } catch (e) {
-        showToast('切换失败：' + e.message, 'error');
-    }
+    // 这个函数已经在上面重新实现了，这里保留空函数以避免错误
+    return;
 }
 
 function updateSpineModelPreview() {
-    const select = document.getElementById('spineModelSelect');
-    const preview = document.getElementById('spineModelPreview');
-    const opt = select.options[select.selectedIndex];
-    const previewPathRaw = opt && opt.dataset && opt.dataset.atlas ? opt.dataset.atlas.replace('.atlas','') + '.png' : '';
-    const previewPath = safeUrl(previewPathRaw);
-    if (previewPath) {
-        preview.style.background = `url(${previewPath}) center/contain no-repeat`;
-        preview.innerHTML = '';
-    } else {
-        preview.style.background = '#f8f9fa';
-        preview.innerHTML = '<div class="text-muted">暂无预览</div>';
-    }
+    // 这个函数已经在上面重新实现了，这里保留空函数以避免错误
+    return;
 }
 
 // 延后到页面ready后加载

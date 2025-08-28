@@ -937,62 +937,85 @@ def fontawesome_static(filename):
     return send_from_directory('fontawesome-free-7.0.0-web', filename)
 
 # === 提供ArkModels模型静态文件（Spine） ===
-@app.route('/arkmodels/<path:filename>')
-def arkmodels_static(filename):
+@app.route('/arkmodels/<folder>/<path:filename>')
+def arkmodels_static(folder, filename):
     """
     提供ArkModels下的Spine模型资源(.skel/.json/.atlas/.png)
+    支持三个模型目录：models、models_enemies、models_illust
     """
-    base_dir = os.path.join('ArkModels', 'ArkModels', 'models')
+    # 验证文件夹名称
+    allowed_folders = ['models', 'models_enemies', 'models_illust']
+    if folder not in allowed_folders:
+        return "Invalid folder", 404
+    
+    base_dir = os.path.join('ArkModels', 'ArkModels', folder)
     return send_from_directory(base_dir, filename)
 
 @app.route('/api/spine_models')
 def api_spine_models():
     """
-    获取所有可用的Spine模型
+    获取所有可用的Spine模型，按文件夹分组
     
     Returns:
-        JSON响应包含模型列表和详细信息
+        JSON响应包含按文件夹分组的模型列表和详细信息
     """
     try:
-        models = []
-        models_dir = os.path.join('ArkModels', 'ArkModels', 'models')
+        folders = {}
+        model_folders = ['models', 'models_enemies', 'models_illust']
+        folder_display_names = {
+            'models': '角色模型',
+            'models_enemies': '敌人模型', 
+            'models_illust': '立绘模型'
+        }
         
-        if os.path.exists(models_dir):
-            for folder_name in os.listdir(models_dir):
-                folder_path = os.path.join(models_dir, folder_name)
-                if os.path.isdir(folder_path):
-                    # 检查是否有必要的文件 (.skel和.atlas)
-                    skel_file = None
-                    atlas_file = None
-                    png_file = None
-                    
-                    for file in os.listdir(folder_path):
-                        if file.endswith('.skel'):
-                            skel_file = file
-                        elif file.endswith('.atlas'):
-                            atlas_file = file
-                        elif file.endswith('.png'):
-                            png_file = file
-                    
-                    if skel_file and atlas_file:  # 只有同时存在.skel和.atlas的才是有效模型
-                        models.append({
-                            'id': folder_name,
-                            'name': folder_name,
-                            'skel_file': skel_file,
-                            'atlas_file': atlas_file,
-                            'png_file': png_file,
-                            'skel_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(skel_file, safe='')}",
-                            'atlas_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(atlas_file, safe='')}",
-                            'preview_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(png_file, safe='')}" if png_file else None
-                        })
-        
-        # 按名称排序
-        models.sort(key=lambda x: x['id'])
+        for folder_name in model_folders:
+            models_dir = os.path.join('ArkModels', 'ArkModels', folder_name)
+            models = []
+            
+            if os.path.exists(models_dir):
+                for model_folder in os.listdir(models_dir):
+                    model_path = os.path.join(models_dir, model_folder)
+                    if os.path.isdir(model_path):
+                        # 检查是否有必要的文件 (.skel和.atlas)
+                        skel_file = None
+                        atlas_file = None
+                        png_file = None
+                        
+                        for file in os.listdir(model_path):
+                            if file.endswith('.skel'):
+                                skel_file = file
+                            elif file.endswith('.atlas'):
+                                atlas_file = file
+                            elif file.endswith('.png'):
+                                png_file = file
+                        
+                        if skel_file and atlas_file:  # 只有同时存在.skel和.atlas的才是有效模型
+                            models.append({
+                                'id': model_folder,
+                                'name': model_folder,
+                                'folder': folder_name,
+                                'skel_file': skel_file,
+                                'atlas_file': atlas_file,
+                                'png_file': png_file,
+                                'skel_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(model_folder, safe='')}/{quote(skel_file, safe='')}",
+                                'atlas_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(model_folder, safe='')}/{quote(atlas_file, safe='')}",
+                                'preview_path': f"/arkmodels/{quote(folder_name, safe='')}/{quote(model_folder, safe='')}/{quote(png_file, safe='')}" if png_file else None
+                            })
+            
+            # 按名称排序
+            models.sort(key=lambda x: x['id'])
+            
+            if models:  # 只有当文件夹中有模型时才添加
+                folders[folder_name] = {
+                    'name': folder_display_names.get(folder_name, folder_name),
+                    'models': models,
+                    'count': len(models)
+                }
         
         return jsonify({
             'success': True,
-            'models': models,
-            'count': len(models)
+            'folders': folders,
+            'total_count': sum(folder['count'] for folder in folders.values())
         })
         
     except Exception as e:
@@ -1004,12 +1027,22 @@ def api_spine_models():
 @app.route('/api/spine_model/current')
 def api_spine_model_current():
     try:
-        default_model_id = '113_cqbw'
-        model_id = session.get('spine_model_id', default_model_id)
-        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        default_model_info = {'folder': 'models', 'id': '113_cqbw'}
+        model_info = session.get('spine_model_id', default_model_info)
+        
+        # 兼容旧格式（字符串）和新格式（字典）
+        if isinstance(model_info, str):
+            folder = 'models'
+            model_id = model_info
+        else:
+            folder = model_info.get('folder', 'models')
+            model_id = model_info.get('id', '113_cqbw')
+        
+        base_dir = os.path.join('ArkModels', 'ArkModels', folder, model_id)
         skel_file = None
         atlas_file = None
         png_file = None
+        
         if os.path.isdir(base_dir):
             for f in os.listdir(base_dir):
                 if f.endswith('.skel'):
@@ -1018,10 +1051,12 @@ def api_spine_model_current():
                     atlas_file = f
                 elif f.endswith('.png'):
                     png_file = f
+        
         if not (skel_file and atlas_file):
             # 回落到默认模型
-            model_id = default_model_id
-            base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+            folder = default_model_info['folder']
+            model_id = default_model_info['id']
+            base_dir = os.path.join('ArkModels', 'ArkModels', folder, model_id)
             for f in os.listdir(base_dir):
                 if f.endswith('.skel'):
                     skel_file = f
@@ -1029,12 +1064,14 @@ def api_spine_model_current():
                     atlas_file = f
                 elif f.endswith('.png'):
                     png_file = f
+        
         return jsonify({
             'success': True,
+            'folder': folder,
             'id': model_id,
-            'skel_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
-            'atlas_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
-            'preview_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
+            'skel_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
+            'atlas_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
+            'preview_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1044,11 +1081,20 @@ def api_spine_model_select():
     try:
         data = request.get_json(force=True) or {}
         model_id = data.get('id')
+        folder = data.get('folder', 'models')  # 默认为 models 文件夹
+        
         if not model_id:
             return jsonify({'success': False, 'message': '缺少模型id'}), 400
-        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        
+        # 验证文件夹名称
+        allowed_folders = ['models', 'models_enemies', 'models_illust']
+        if folder not in allowed_folders:
+            return jsonify({'success': False, 'message': '无效的文件夹名称'}), 400
+        
+        base_dir = os.path.join('ArkModels', 'ArkModels', folder, model_id)
         if not os.path.isdir(base_dir):
             return jsonify({'success': False, 'message': '模型目录不存在'}), 404
+        
         skel_file = None
         atlas_file = None
         png_file = None
@@ -1059,16 +1105,21 @@ def api_spine_model_select():
                 atlas_file = f
             elif f.endswith('.png'):
                 png_file = f
+        
         if not (skel_file and atlas_file):
             return jsonify({'success': False, 'message': '模型文件不完整（缺少.skel或.atlas）'}), 400
-        session['spine_model_id'] = model_id
+        
+        # 存储完整的模型信息（包含文件夹和ID）
+        session['spine_model_id'] = {'folder': folder, 'id': model_id}
+        
         return jsonify({
             'success': True,
             'message': '模型已更新',
+            'folder': folder,
             'id': model_id,
-            'skel_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
-            'atlas_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
-            'preview_path': f"/arkmodels/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
+            'skel_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(skel_file, safe='')}",
+            'atlas_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}",
+            'preview_path': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(png_file, safe='')}" if png_file else None
         })
     except Exception as e:
         return jsonify({'success': False, 'message': f'更新失败：{str(e)}'}), 500
@@ -1076,35 +1127,50 @@ def api_spine_model_select():
 @app.context_processor
 def inject_spine_model():
     try:
-        default_model_id = '113_cqbw'
-        model_id = session.get('spine_model_id', default_model_id)
-        base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+        default_model_info = {'folder': 'models', 'id': '113_cqbw'}
+        model_info = session.get('spine_model_id', default_model_info)
+        
+        # 兼容旧格式（字符串）和新格式（字典）
+        if isinstance(model_info, str):
+            folder = 'models'
+            model_id = model_info
+        else:
+            folder = model_info.get('folder', 'models')
+            model_id = model_info.get('id', '113_cqbw')
+        
+        base_dir = os.path.join('ArkModels', 'ArkModels', folder, model_id)
         skel_file = None
         atlas_file = None
+        
         if os.path.isdir(base_dir):
             for f in os.listdir(base_dir):
                 if f.endswith('.skel'):
                     skel_file = f
                 elif f.endswith('.atlas'):
                     atlas_file = f
+        
         if not (skel_file and atlas_file):
-            model_id = default_model_id
-            base_dir = os.path.join('ArkModels', 'ArkModels', 'models', model_id)
+            folder = default_model_info['folder']
+            model_id = default_model_info['id']
+            base_dir = os.path.join('ArkModels', 'ArkModels', folder, model_id)
             for f in os.listdir(base_dir):
                 if f.endswith('.skel'):
                     skel_file = f
                 elif f.endswith('.atlas'):
                     atlas_file = f
+        
         return {
             'SPINE_MODEL_ID': model_id,
-            'SPINE_MODEL_SKEL': f"/arkmodels/{quote(model_id, safe='')}/{quote(skel_file, safe='')}" if skel_file else '',
-            'SPINE_MODEL_ATLAS': f"/arkmodels/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}" if atlas_file else ''
+            'SPINE_MODEL_FOLDER': folder,
+            'SPINE_MODEL_SKEL': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(skel_file, safe='')}" if skel_file else '',
+            'SPINE_MODEL_ATLAS': f"/arkmodels/{quote(folder, safe='')}/{quote(model_id, safe='')}/{quote(atlas_file, safe='')}" if atlas_file else ''
         }
     except Exception:
         return {
             'SPINE_MODEL_ID': '113_cqbw',
-            'SPINE_MODEL_SKEL': '/arkmodels/113_cqbw/build_char_113_cqbw.skel',
-            'SPINE_MODEL_ATLAS': '/arkmodels/113_cqbw/build_char_113_cqbw.atlas'
+            'SPINE_MODEL_FOLDER': 'models',
+            'SPINE_MODEL_SKEL': '/arkmodels/models/113_cqbw/build_char_113_cqbw.skel',
+            'SPINE_MODEL_ATLAS': '/arkmodels/models/113_cqbw/build_char_113_cqbw.atlas'
         }
 
 @app.context_processor
