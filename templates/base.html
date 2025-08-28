@@ -1527,28 +1527,73 @@
         function handleMouseClick() {
             if (!currentMovingSpine || isMouseInteracting) return;
             
-            const interactAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
-                anim.name.toLowerCase().includes('interact')
-            );
-            
-            if (interactAnimations.length > 0) {
-                const interactAnim = interactAnimations[0];
-                currentMovingSpine.state.setAnimation(0, interactAnim.name, false);
-                isMouseInteracting = true;
-                isPaused = false;
-                
-                currentMovingSpine.state.addListener({
-                    complete: function(entry) {
-                        if (entry.animation.name === interactAnim.name && isMouseInteracting) {
-                            isMouseInteracting = false;
-                            if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
-                                currentMovingSpine.state.setAnimation(0, originalAnimation, true);
+            // 异步获取当前模型信息来判断是否为敌人模型
+            fetch('/api/spine_model/current')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success || !currentMovingSpine || isMouseInteracting) return;
+                    
+                    // 检查模型是否来自models_enemies文件夹
+                    const isEnemyModel = data.skel_path && data.skel_path.includes('/models_enemies/');
+                    
+                    let targetAnimations;
+                    if (isEnemyModel) {
+                        // 敌人模型使用attack动作
+                        targetAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+                            anim.name.toLowerCase().includes('attack')
+                        );
+                    } else {
+                        // 普通模型使用interact动作
+                        targetAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+                            anim.name.toLowerCase().includes('interact')
+                        );
+                    }
+                    
+                    if (targetAnimations.length > 0) {
+                        const targetAnim = targetAnimations[0];
+                        currentMovingSpine.state.setAnimation(0, targetAnim.name, false);
+                        isMouseInteracting = true;
+                        isPaused = false;
+                        
+                        currentMovingSpine.state.addListener({
+                            complete: function(entry) {
+                                if (entry.animation.name === targetAnim.name && isMouseInteracting) {
+                                    isMouseInteracting = false;
+                                    if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                                        currentMovingSpine.state.setAnimation(0, originalAnimation, true);
+                                    }
+                                    currentMovingSpine.state.clearListeners();
+                                }
                             }
-                            currentMovingSpine.state.clearListeners();
-                        }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('获取当前模型信息失败:', error);
+                    // 回退到默认的interact动作
+                    const targetAnimations = currentMovingSpine.state.data.skeletonData.animations.filter(anim => 
+                        anim.name.toLowerCase().includes('interact')
+                    );
+                    
+                    if (targetAnimations.length > 0) {
+                        const targetAnim = targetAnimations[0];
+                        currentMovingSpine.state.setAnimation(0, targetAnim.name, false);
+                        isMouseInteracting = true;
+                        isPaused = false;
+                        
+                        currentMovingSpine.state.addListener({
+                            complete: function(entry) {
+                                if (entry.animation.name === targetAnim.name && isMouseInteracting) {
+                                    isMouseInteracting = false;
+                                    if (originalAnimation && currentMovingSpine.state.data.skeletonData.findAnimation(originalAnimation)) {
+                                        currentMovingSpine.state.setAnimation(0, originalAnimation, true);
+                                    }
+                                    currentMovingSpine.state.clearListeners();
+                                }
+                            }
+                        });
                     }
                 });
-            }
         }
         
         // 暴露全局函数

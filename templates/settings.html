@@ -1024,10 +1024,12 @@ async function loadSpineModels() {
         
         // 填充文件夹选择器
         folderSelect.innerHTML = '';
-        Object.keys(spineModelsData).forEach(folder => {
+        const folders = Object.keys(spineModelsData);
+        
+        folders.forEach(folder => {
             const opt = document.createElement('option');
             opt.value = folder;
-            opt.textContent = spineModelsData[folder].display_name;
+            opt.textContent = spineModelsData[folder].display_name || folder;
             if (folder === currentFolder) opt.selected = true;
             folderSelect.appendChild(opt);
         });
@@ -1098,7 +1100,32 @@ function bindModelEvents() {
     
     // 模型选择变化
     if (!modelSelect._changeBound) {
-        modelSelect.addEventListener('change', onSpineModelChange);
+        modelSelect.addEventListener('change', async () => {
+            const folderSelect = document.getElementById('spineModelFolderSelect');
+            const modelSelect = document.getElementById('spineModelSelect');
+            const folder = folderSelect.value;
+            const id = modelSelect.value;
+            
+            if (!folder || !id) return;
+            
+            try {
+                const res = await fetch('/api/spine_model/select', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folder, id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const folderName = spineModelsData[folder]?.display_name || folder;
+                    showToast(`已切换宠物模型为：${folderName} - ${id}`, 'success');
+                    updateSpineModelPreview();
+                } else {
+                    showToast(data.message || '切换失败', 'error');
+                }
+            } catch (e) {
+                showToast('切换失败：' + e.message, 'error');
+            }
+        });
         modelSelect._changeBound = true;
     }
     
@@ -1123,7 +1150,27 @@ function bindModelSearch() {
         const visible = options.filter(o => !o.hidden);
         if (visible.length > 0 && visible.every(o => !o.selected)) {
             visible[0].selected = true;
-            updateSpineModelPreview();
+            // 触发预览更新
+            const preview = document.getElementById('spineModelPreview');
+            const opt = visible[0];
+            
+            if (opt && opt.dataset) {
+                const previewPath = opt.dataset.preview;
+                if (previewPath) {
+                    preview.style.background = `url(${safeUrl(previewPath)}) center/contain no-repeat`;
+                    preview.innerHTML = '';
+                } else {
+                    const atlasPath = opt.dataset.atlas;
+                    if (atlasPath) {
+                        const previewPathFromAtlas = atlasPath.replace('.atlas', '.png');
+                        preview.style.background = `url(${safeUrl(previewPathFromAtlas)}) center/contain no-repeat`;
+                        preview.innerHTML = '';
+                    } else {
+                        preview.style.background = '#f8f9fa';
+                        preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+                    }
+                }
+            }
         }
     });
     input._bound = true;
@@ -1163,7 +1210,7 @@ function updateSpineModelPreview() {
     
     if (!opt || !opt.dataset) {
         preview.style.background = '#f8f9fa';
-        preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+        preview.innerHTML = '<div class="text-muted"><i class="bi bi-image" style="font-size: 24px; display: block; margin-bottom: 8px;"></i>暂无预览</div>';
         return;
     }
     
@@ -1180,7 +1227,7 @@ function updateSpineModelPreview() {
             preview.innerHTML = '';
         } else {
             preview.style.background = '#f8f9fa';
-            preview.innerHTML = '<div class="text-muted">暂无预览</div>';
+            preview.innerHTML = '<div class="text-muted"><i class="bi bi-image" style="font-size: 24px; display: block; margin-bottom: 8px;"></i>暂无预览</div>';
         }
     }
 }
@@ -1274,20 +1321,7 @@ function bindRefreshButtons(){
     }
 }
 
-function bindModelSearch(){
-    // 这个函数已经在bindModelEvents中重新实现了，这里保留空函数以避免错误
-    return;
-}
-
-async function onSpineModelChange() {
-    // 这个函数已经在上面重新实现了，这里保留空函数以避免错误
-    return;
-}
-
-function updateSpineModelPreview() {
-    // 这个函数已经在上面重新实现了，这里保留空函数以避免错误
-    return;
-}
+// 这些函数已经在bindModelEvents中重新实现了
 
 // 延后到页面ready后加载
 window.addEventListener('DOMContentLoaded', function() {

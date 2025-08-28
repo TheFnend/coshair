@@ -1163,6 +1163,9 @@
             const weights = [];
             const actions = [];
             
+            // 检查模型是否来自models_enemies文件夹
+            const isEnemyModel = pet.skelUrl && pet.skelUrl.includes('/models_enemies/');
+            
             const hasRelaxIdle = animations.some(anim => {
                 const name = anim.name.toLowerCase();
                 return name.includes('relax') || name.includes('idle');
@@ -1172,12 +1175,23 @@
                 actions.push('relax');
             }
             
-            const hasSleep = animations.some(anim => 
-                anim.name.toLowerCase().includes('sleep')
-            );
-            if (hasSleep) {
-                weights.push(ACTION_WEIGHTS.sleep);
-                actions.push('sleep');
+            // 对于敌人模型，检查die动作替代sleep
+            if (isEnemyModel) {
+                const hasDie = animations.some(anim => 
+                    anim.name.toLowerCase().includes('die')
+                );
+                if (hasDie) {
+                    weights.push(ACTION_WEIGHTS.sleep);
+                    actions.push('die'); // 使用die动作但保持sleep的权重
+                }
+            } else {
+                const hasSleep = animations.some(anim => 
+                    anim.name.toLowerCase().includes('sleep')
+                );
+                if (hasSleep) {
+                    weights.push(ACTION_WEIGHTS.sleep);
+                    actions.push('sleep');
+                }
             }
             
             const hasMove = animations.some(anim => {
@@ -1197,6 +1211,17 @@
             if (hasSpecial) {
                 weights.push(ACTION_WEIGHTS.special);
                 actions.push('special');
+            }
+            
+            // 对于敌人模型，添加attack动作替代interact
+            if (isEnemyModel) {
+                const hasAttack = animations.some(anim => 
+                    anim.name.toLowerCase().includes('attack')
+                );
+                if (hasAttack) {
+                    weights.push(ACTION_WEIGHTS.special); // 使用special的权重
+                    actions.push('attack');
+                }
             }
             
             const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
@@ -1285,6 +1310,29 @@
                     pet.isInMoveAction = false;
                     hideSleepBubble(pet); // 隐藏睡觉图标
                     break;
+                case 'die':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('die')
+                    );
+                    pet.isInMoveAction = false;
+                    // 死亡时统一朝右，确保睡觉图标方向一致
+                    if (pet.spine.skeleton) {
+                        pet.spine.skeleton.scaleX = Math.abs(pet.spine.skeleton.scaleX);
+                    }
+                    // 显式标记睡眠状态并清零速度，避免残余速度导致朝向被翻转
+                    pet.isSleeping = true;
+                    if (typeof pet.vx === 'number') pet.vx = 0;
+                    if (typeof pet.vy === 'number') pet.vy = 0;
+                    pet.moveDirection = 0;
+                    showSleepBubble(pet); // 显示睡觉图标
+                    break;
+                case 'attack':
+                    targetAnimation = animations.find(anim => 
+                        anim.name.toLowerCase().includes('attack')
+                    );
+                    pet.isInMoveAction = false;
+                    hideSleepBubble(pet); // 隐藏睡觉图标
+                    break;
             }
             
             if (!targetAnimation) {
@@ -1365,7 +1413,10 @@
                 // 首次进入时可播放一次交互动画
                 if (!pet.hasInitialInteract) {
                     pet.hasInitialInteract = true;
-                    performAction(pet, 'interact');
+                    // 根据模型类型选择动作
+                    const isEnemyModel = pet.skelUrl && pet.skelUrl.includes('/models_enemies/');
+                    const actionType = isEnemyModel ? 'attack' : 'interact';
+                    performAction(pet, actionType);
                 }
                 const wasOnGround = !!pet.isOnGround;
                 
@@ -1401,7 +1452,10 @@
                     if (!wasOnGround && pet.dropStartY != null) {
                         const droppedHeight = groundY - pet.dropStartY;
                         if (droppedHeight >= DROP_THRESHOLD) {
-                            performAction(pet, 'interact');
+                            // 根据模型类型选择动作
+                            const isEnemyModel = pet.skelUrl && pet.skelUrl.includes('/models_enemies/');
+                            const actionType = isEnemyModel ? 'attack' : 'interact';
+                            performAction(pet, actionType);
                         }
                     }
                     pet.spine.y = groundY;
@@ -1727,18 +1781,22 @@
         function handleMouseClick(pet) {
             if (!pet || !pet.spine || pet.isMouseInteracting) return;
             
-            const interactAnimations = pet.spine.state.data.skeletonData.animations.filter(anim => 
-                anim.name.toLowerCase().includes('interact')
+            // 根据模型路径判断是否为敌人模型
+            const isEnemyModel = pet.skelUrl && pet.skelUrl.includes('/models_enemies/');
+            const actionType = isEnemyModel ? 'attack' : 'interact';
+            
+            const targetAnimations = pet.spine.state.data.skeletonData.animations.filter(anim => 
+                anim.name.toLowerCase().includes(actionType)
             );
             
-            if (interactAnimations.length > 0) {
-                const interactAnim = interactAnimations[0];
-                pet.spine.state.setAnimation(0, interactAnim.name, false);
+            if (targetAnimations.length > 0) {
+                const targetAnim = targetAnimations[0];
+                pet.spine.state.setAnimation(0, targetAnim.name, false);
                 pet.isMouseInteracting = true;
                 
                 pet.spine.state.addListener({
                     complete: function(entry) {
-                        if (entry.animation.name === interactAnim.name && pet.isMouseInteracting) {
+                        if (entry.animation.name === targetAnim.name && pet.isMouseInteracting) {
                             pet.isMouseInteracting = false;
                             pet.spine.state.clearListeners();
                             const nextAction = selectWeightedAction(pet);
