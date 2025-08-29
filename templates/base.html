@@ -1142,17 +1142,40 @@
                         C.prototype.updateTransform = function(...args) {
                             try {
                                 if (this && Array.isArray(this.children)) {
-                                    for (let i = 0; i < this.children.length; i++) {
-                                        const ch = this.children[i];
-                                        if (!ch || typeof ch.visible === 'undefined') {
+                                    // 防御性过滤：只移除明确无效的子节点
+                                    this.children = this.children.filter(ch => {
+                                        return ch && 
+                                               typeof ch === 'object' && 
+                                               ('visible' in ch) && 
+                                               !ch.destroyed;
+                                    });
+                                }
+                            } catch(e) { 
+                                console.warn('updateTransform cleanup failed:', e);
+                                // 如果过滤失败，至少确保children是数组
+                                if (!Array.isArray(this.children)) {
+                                    this.children = [];
+                                }
+                            }
+                            try {
+                                // 在调用原始函数前再次验证所有子节点
+                                if (this && Array.isArray(this.children)) {
+                                    for (let i = this.children.length - 1; i >= 0; i--) {
+                                        const child = this.children[i];
+                                        if (!child || typeof child !== 'object' || !('visible' in child) || child.destroyed) {
                                             this.children.splice(i, 1);
-                                            i--;
-                                            continue;
                                         }
                                     }
                                 }
-                            } catch(_) { }
-                            return origUpdateTransform.apply(this, args);
+                                return origUpdateTransform.apply(this, args);
+                            } catch(e) {
+                                console.warn('updateTransform failed, attempting recovery:', e.message);
+                                // 尝试清理并重试
+                                if (this && Array.isArray(this.children)) {
+                                    this.children = this.children.filter(ch => ch && typeof ch === 'object' && ('visible' in ch) && !ch.destroyed);
+                                }
+                                return this;
+                            }
                         };
                         C.prototype.__safeUpdateTransformPatched = true;
                     }
