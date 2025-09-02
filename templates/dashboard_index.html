@@ -935,14 +935,15 @@ function clearFilters() {
 
 // 切换已完成订单显示
 function toggleCompleted() {
-    const showCompleted = document.getElementById('showCompleted').checked;
-    toggleCompletedOrders(showCompleted);
+    // 重新应用所有筛选条件，包括已完成订单的显示状态
+    applyFilters();
     
     // 更新统计卡片
     updateOrderStats();
     
     // 更新URL参数
     const url = new URL(window.location);
+    const showCompleted = document.getElementById('showCompleted').checked;
     if (showCompleted) {
         url.searchParams.set('show_completed', 'true');
     } else {
