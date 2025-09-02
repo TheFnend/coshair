@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 07妙妙屋订单管理系统
 主应用程序文件
@@ -15,6 +14,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, date
+from sqlalchemy import text
 import os
 import json
 import uuid
@@ -41,6 +41,23 @@ CORS(app)
 
 # 初始化数据库
 db = SQLAlchemy(app)
+
+# 在应用启动时确保数据库包含新增列（轻量迁移）
+def _ensure_order_extra_columns():
+    try:
+        with db.engine.connect() as conn:
+            # 查询现有列
+            result = conn.execute(text('PRAGMA table_info("order")'))
+            cols = [row[1] for row in result]  # 第二列是列名
+            if 'completed_at' not in cols:
+                conn.execute(text('ALTER TABLE "order" ADD COLUMN completed_at TEXT'))
+            if 'spent_hours' not in cols:
+                conn.execute(text('ALTER TABLE "order" ADD COLUMN spent_hours REAL'))
+            if 'order_image' not in cols:
+                conn.execute(text('ALTER TABLE "order" ADD COLUMN order_image TEXT'))
+    except Exception:
+        # 忽略迁移错误（例如首次运行表还未创建）
+        pass
 
 # ==================== 数据库模型 ====================
 
@@ -73,6 +90,9 @@ class Order(db.Model):
     blank_purchased = db.Column(db.Boolean, default=False)  # 毛坯购买状态
     cake_box = db.Column(db.String(10), default='不需要')  # 蛋糕盒包装需求
     status = db.Column(db.String(50), default='待制作')  # 订单状态
+    spent_hours = db.Column(db.Float, nullable=True)  # 耗费时间（小时）
+    completed_at = db.Column(db.DateTime, nullable=True)  # 完成时间
+    order_image = db.Column(db.String(300), nullable=True)  # 订单图片相对路径（static下）
     
     def __repr__(self):
         """对象的字符串表示"""
@@ -137,7 +157,9 @@ def index():
             'final_amount': order.final_amount,
             'shipping_included': bool(order.shipping_included),
             'blank_purchased': bool(order.blank_purchased),
-            'status': order.status
+            'status': order.status,
+            'spent_hours': order.spent_hours if order.spent_hours is not None else None,
+            'completed_at': order.completed_at.strftime('%Y-%m-%d %H:%M:%S') if order.completed_at else None,
         })
     
     return render_template('dashboard_index.html', orders=orders, orders_json=json.dumps(orders_dict), sort_by=sort_by, order=order, show_completed=show_completed, platform_filter=platform_filter)
@@ -279,7 +301,9 @@ def api_orders():
         'final_amount': order.final_amount,
         'shipping_included': order.shipping_included,
         'blank_purchased': order.blank_purchased,
-        'status': order.status
+        'status': order.status,
+        'spent_hours': order.spent_hours if order.spent_hours is not None else None,
+        'completed_at': order.completed_at.strftime('%Y-%m-%d %H:%M:%S') if order.completed_at else None,
     } for order in orders])
 
 @app.route('/api/update_order/<int:id>', methods=['POST'])
@@ -293,13 +317,14 @@ def api_update_order(id):
     data = request.get_json()
     
     try:
+        # 记录旧状态以判断是否是完成/发货的切换
+        old_status = order.status
+
         # 根据传入的数据更新相应字段
         if 'deposit_paid' in data:
             order.deposit_paid = data['deposit_paid']
         if 'blank_purchased' in data:
             order.blank_purchased = data['blank_purchased']
-        if 'status' in data:
-            order.status = data['status']
         if 'contact' in data:
             order.contact = data['contact']
         if 'shipping_included' in data:
@@ -308,10 +333,37 @@ def api_update_order(id):
             order.cake_box = data['cake_box']
         if 'needed_date' in data:
             order.needed_date = datetime.strptime(data['needed_date'], '%Y-%m-%d').date()
+        if 'spent_hours' in data:
+            try:
+                order.spent_hours = float(data['spent_hours']) if data['spent_hours'] is not None else None
+            except (TypeError, ValueError):
+                # 忽略无效的耗时输入
+                pass
+        if 'completed_at' in data and data['completed_at']:
+            # 允许从前端显式传递完成时间（ISO或常规格式）
+            try:
+                # 尝试多种格式解析
+                try:
+                    order.completed_at = datetime.fromisoformat(data['completed_at'].replace('Z', '+00:00'))
+                except Exception:
+                    order.completed_at = datetime.strptime(data['completed_at'], '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                # 解析失败则回退为当前时间
+                order.completed_at = datetime.utcnow()
+        
+        if 'status' in data:
+            new_status = data['status']
+            order.status = new_status
+            # 当从 待制作/制作中 -> 已完成/已发货 时，若未显式提供completed_at，则自动写入当前时间
+            if old_status in ['待制作', '制作中'] and new_status in ['已完成', '已发货']:
+                if not hasattr(order, 'completed_at') or order.completed_at is None:
+                    order.completed_at = datetime.utcnow()
+            # 从 已完成 -> 已发货 不修改 completed_at（保持完成时刻）
         
         db.session.commit()
         return jsonify({'success': True, 'message': '更新成功'})
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
 
 # Duplicate of /api/batch_delete removed to avoid endpoint conflict
@@ -345,39 +397,6 @@ def api_upload_background():
     except Exception as e:
         return jsonify({'success': False, 'message': f'上传失败：{str(e)}'}), 500
 
-# 重复定义的 /api/update_order 已移除，避免端点冲突
-# @app.route('/api/update_order/<int:id>', methods=['POST'])
-# def api_update_order(id):
-#     """
-#     更新订单API接口
-#     
-#     支持部分字段更新，用于前端快速操作
-#     """
-#     order = Order.query.get_or_404(id)
-#     data = request.get_json()
-#     
-#     try:
-#         # 根据传入的数据更新相应字段
-#         if 'deposit_paid' in data:
-#             order.deposit_paid = data['deposit_paid']
-#         if 'blank_purchased' in data:
-#             order.blank_purchased = data['blank_purchased']
-#         if 'status' in data:
-#             order.status = data['status']
-#         if 'contact' in data:
-#             order.contact = data['contact']
-#         if 'shipping_included' in data:
-#             order.shipping_included = data['shipping_included']
-#         if 'cake_box' in data:
-#             order.cake_box = data['cake_box']
-#         if 'needed_date' in data:
-#             order.needed_date = datetime.strptime(data['needed_date'], '%Y-%m-%d').date()
-#         
-#         db.session.commit()
-#         return jsonify({'success': True, 'message': '更新成功'})
-#     except Exception as e:
-#         return jsonify({'success': False, 'message': str(e)}), 400
-
 @app.route('/api/batch_delete', methods=['POST'])
 def api_batch_delete():
     """
@@ -399,8 +418,6 @@ def api_batch_delete():
         return jsonify({'success': True, 'message': f'成功删除 {deleted_count} 个订单'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
-
-# ==================== Dashboard页面路由 ====================
 
 @app.route('/dashboard')
 def dashboard_index():
@@ -455,7 +472,9 @@ def dashboard_index():
             'final_amount': order.final_amount,
             'shipping_included': bool(order.shipping_included),
             'blank_purchased': bool(order.blank_purchased),
-            'status': order.status
+            'status': order.status,
+            'spent_hours': order.spent_hours if order.spent_hours is not None else None,
+            'completed_at': order.completed_at.strftime('%Y-%m-%d %H:%M:%S') if order.completed_at else None,
         })
     
     return render_template('dashboard_index.html', orders=orders, orders_json=json.dumps(orders_dict), sort_by=sort_by, order=order, show_completed=show_completed, platform_filter=platform_filter)
@@ -520,6 +539,42 @@ def analytics():
                          quality_score=96,
                          on_time_rate=88,
                          risk_orders=3)
+
+@app.route('/completed')
+def completed_orders():
+    """
+    完成订单页面：展示状态为 已完成/已发货 的订单
+    """
+    orders = Order.query.filter(Order.status.in_(['已完成', '已发货'])) \
+        .order_by(Order.completed_at.desc().nullslast(), Order.needed_date.desc()).all()
+    return render_template('completed_orders.html', orders=orders)
+
+@app.route('/api/upload_order_image/<int:id>', methods=['POST'])
+def api_upload_order_image(id):
+    """
+    上传指定订单的成品图片（要求3:4比例，前端已做校验）
+    返回 { success, url }
+    """
+    order = Order.query.get_or_404(id)
+    if 'file' not in request.files:
+        return jsonify({ 'success': False, 'message': '未选择文件' }), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({ 'success': False, 'message': '未选择文件' }), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return jsonify({ 'success': False, 'message': '不支持的文件类型' }), 400
+    # 确保目录存在
+    save_dir = os.path.join('static', 'uploads', 'order_images')
+    os.makedirs(save_dir, exist_ok=True)
+    # 生成唯一文件名
+    filename = secure_filename(f"order_{id}_{uuid.uuid4().hex}{ext}")
+    save_path = os.path.join(save_dir, filename)
+    file.save(save_path)
+    # 存储相对static路径，模板中通过 url_for('static', filename=order.order_image) 引用
+    order.order_image = os.path.join('uploads', 'order_images', filename).replace('\\', '/')
+    db.session.commit()
+    return jsonify({ 'success': True, 'url': url_for('static', filename=order.order_image) })
 
 @app.route('/inventory')
 def inventory():
@@ -1370,7 +1425,8 @@ if __name__ == '__main__':
     # 创建应用上下文并初始化数据库
     with app.app_context():
         db.create_all()  # 创建所有数据表
-
+        _ensure_order_extra_columns()  # 轻量迁移，确保新增列存在
+    
     # 启动开发服务器
     app.run(
         debug=True,        # 开启调试模式

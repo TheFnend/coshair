@@ -1,0 +1,173 @@
+{% extends 'dashboard_base.html' %}
+{% block title %}已完成订单 - 07妙妙屋订单管理系统{% endblock %}
+{% block page_title %}已完成订单{% endblock %}
+
+{% block extra_css %}
+<style>
+    .order-table th, .order-table td { vertical-align: middle; }
+    .thumb { width: 90px; height: 120px; object-fit: cover; border-radius: 6px; background:#f3f5f8; }
+    .hidden-input { display: none; }
+    .img-uploader { display:flex; align-items:center; gap:10px; }
+    .img-uploader .btn { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="card-title mb-0">已完成/已发货订单</h5>
+      <div class="text-muted">共 {{ orders|length }} 条</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover order-table">
+        <thead class="table-light">
+          <tr>
+            <th>图片</th>
+            <th>CN</th>
+            <th>角色</th>
+            <th>尾款</th>
+            <th>耗时(小时)</th>
+            <th>状态</th>
+            <th>完成时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for o in orders %}
+          <tr data-id="{{ o.id }}">
+            <td style="width:110px;">
+              {% if o.order_image %}
+                <img class="thumb" src="{{ url_for('static', filename=o.order_image) }}" alt="order image">
+              {% else %}
+                <div class="text-muted" style="width:90px;height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed #d9dfe7;border-radius:6px;">无图</div>
+              {% endif %}
+            </td>
+            <td>{{ o.cn }}</td>
+            <td>{{ o.character }}</td>
+            <td>¥ {{ '%.2f'|format(o.final_amount or 0) }}</td>
+            <td>{{ o.spent_hours if o.spent_hours is not none else '-' }}</td>
+            <td><span class="badge bg-success">{{ o.status }}</span></td>
+            <td>{{ o.completed_at.strftime('%Y-%m-%d %H:%M') if o.completed_at else '-' }}</td>
+            <td>
+              <div class="img-uploader">
+                <input class="hidden-input" type="file" accept="image/*" data-file for="file-{{ o.id }}" id="file-{{ o.id }}">
+                <button class="btn btn-sm btn-outline-primary" onclick="triggerFile({{ o.id }})">
+                  <i class="bi bi-upload"></i> 上传图片
+                </button>
+                {% if o.order_image %}
+                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('static', filename=o.order_image) }}" target="_blank">
+                  查看原图
+                </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 简单的 3:4 约束：提示 + 预览裁剪框比例限制由 CSS 保证可视比例，后台未强制裁剪，仅存储 -->
+<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-center">
+          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
+            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
+          </div>
+        </div>
+        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentOrderId = null;
+let selectedFile = null;
+const ratioW = 3, ratioH = 4;
+
+function triggerFile(id) {
+  currentOrderId = id;
+  const input = document.getElementById('file-' + id);
+  if (input) input.click();
+}
+
+document.addEventListener('change', function(e) {
+  const target = e.target;
+  if (target && target.matches('input[type="file"][data-file]')) {
+    const file = target.files && target.files[0];
+    if (!file) return;
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const img = new Image();
+      img.onload = function() {
+        // 简单比例校验（不强制裁剪，仅提示）
+        const w = img.width, h = img.height;
+        const r = (w / h).toFixed(2);
+        const targetR = (ratioW / ratioH).toFixed(2);
+        if (Math.abs(r - targetR) > 0.05) {
+          alert(`建议上传3:4比例图片，当前比例为 ${r}，可能会被自动等比缩放显示。`);
+        }
+        document.getElementById('previewImg').src = ev.target.result;
+        const modal = new bootstrap.Modal(document.getElementById('cropperModal'));
+        modal.show();
+      }
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// 确认上传
+const confirmBtn = document.getElementById('confirmUploadBtn');
+confirmBtn?.addEventListener('click', async function() {
+  if (!currentOrderId || !selectedFile) return;
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  try {
+    const resp = await fetch(`/api/upload_order_image/${currentOrderId}`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (data.success) {
+      // 更新对应行缩略图
+      const row = document.querySelector(`tr[data-id="${currentOrderId}"]`);
+      const img = row?.querySelector('img.thumb');
+      const placeholder = row?.querySelector('div[style*="dashed"]');
+      const url = data.url + `?t=${Date.now()}`;
+      if (img) { img.src = url; }
+      else if (placeholder) {
+        const el = document.createElement('img');
+        el.className = 'thumb';
+        el.src = url;
+        placeholder.replaceWith(el);
+      }
+      bootstrap.Modal.getInstance(document.getElementById('cropperModal'))?.hide();
+      selectedFile = null;
+      currentOrderId = null;
+    } else {
+      alert(data.message || '上传失败');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('上传失败');
+  }
+});
+</script>
+{% endblock %}

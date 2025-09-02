@@ -493,6 +493,12 @@
                 </a>
             </div>
             <div class="nav-item">
+                <a href="{{ url_for('completed_orders') }}" class="nav-link {% if request.endpoint == 'completed_orders' %}active{% endif %}">
+                    <i class="bi bi-check2-circle nav-icon"></i>
+                    已完成订单
+                </a>
+            </div>
+            <div class="nav-item">
                 <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}">
                     <i class="bi bi-box-seam nav-icon"></i>
                     材料库存
