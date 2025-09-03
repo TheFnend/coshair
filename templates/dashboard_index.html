@@ -1236,65 +1236,119 @@ function handleStatusChange(orderId, selectEl) {
 
     if (fromStartToEnd) {
         let defaultVal = order && typeof order.spent_hours === 'number' ? String(order.spent_hours) : '';
-        const input = window.prompt('请输入该订单耗费时间（小时，可为小数）：', defaultVal);
-        if (input === null) {
-            // 用户取消，恢复原值
+        
+        // 创建自定义模态框
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+        `;
+        
+        const dialog = document.createElement('div');
+        dialog.style.cssText = `
+            background: white; border-radius: 8px; padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 400px; width: 90%;
+        `;
+        
+        dialog.innerHTML = `
+            <h5 style="margin: 0 0 15px 0; color: #198754;">状态更新与耗时</h5>
+            <p style="margin: 0 0 15px 0; color: #666;">状态：${oldStatus} → ${newStatus}</p>
+            <div style="margin: 0 0 20px 0;">
+                <label style="display: block; margin-bottom: 5px; color: #333;">本次耗时（小时，可选）</label>
+                <input type="number" id="hoursInput" class="form-control" min="0" step="0.1" 
+                       placeholder="例如 2.5" value="${defaultVal}" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div style="text-align: right;">
+                <button type="button" class="btn btn-secondary me-2" onclick="cancelHoursInput()">取消</button>
+                <button type="button" class="btn btn-success" onclick="confirmHoursInput()">确认更新</button>
+            </div>
+        `;
+        
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        
+        // 聚焦输入框
+        setTimeout(() => {
+            const input = document.getElementById('hoursInput');
+            if (input) input.focus();
+        }, 100);
+        
+        // 全局函数处理确认和取消
+        window.cancelHoursInput = function() {
+            document.body.removeChild(overlay);
             if (oldStatus) {
                 selectEl.value = oldStatus;
                 updateSelectColors();
             }
             showToast('已取消状态变更', 'warning');
-            return;
-        }
-        const hours = parseFloat(input);
-        if (Number.isNaN(hours) || hours < 0) {
-            if (oldStatus) {
-                selectEl.value = oldStatus;
-                updateSelectColors();
-            }
-            showToast('请输入有效的耗费时间（非负数字）', 'error');
-            return;
-        }
-        const payload = {
-            status: newStatus,
-            spent_hours: hours,
-            completed_at: new Date().toISOString()
         };
-        fetch(`/api/update_order/${orderId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }).then(r => r.json()).then(res => {
-            if (res.success) {
-                if (order) {
-                    order.status = newStatus;
-                    order.spent_hours = hours;
-                    order.completed_at = new Date().toISOString();
+        
+        window.confirmHoursInput = function() {
+            const input = document.getElementById('hoursInput');
+            const inputValue = input ? input.value.trim() : '';
+            
+            let hours = 0;
+            if (inputValue !== '') {
+                hours = parseFloat(inputValue);
+                if (Number.isNaN(hours) || hours < 0) {
+                    showToast('请输入有效的耗费时间（非负数字）', 'error');
+                    return;
                 }
-                updateSelectColors();
-                showToast('更新成功', 'success');
-                const showCompletedChecked = document.getElementById('showCompleted') ? document.getElementById('showCompleted').checked : true;
-                if ((newStatus === '已完成' || newStatus === '已发货') && !showCompletedChecked) {
-                    setTimeout(() => location.reload(), 800);
-                }
-            } else {
-                // 失败则恢复原值
-                if (oldStatus) {
-                    selectEl.value = oldStatus;
-                    updateSelectColors();
-                }
-                showToast('更新失败: ' + res.message, 'error');
             }
-        }).catch(err => {
-            console.error(err);
-            if (oldStatus) {
-                selectEl.value = oldStatus;
-                updateSelectColors();
-            }
-            showToast('网络错误', 'error');
-        });
+            
+            document.body.removeChild(overlay);
+            
+            // 继续原有的更新逻辑
+            updateOrderWithHours(orderId, newStatus, hours, selectEl, oldStatus, order);
+        };
+        
         return;
     }
+    
+    // 提取更新订单的逻辑为独立函数
+    function updateOrderWithHours(orderId, newStatus, hours, selectEl, oldStatus, order) {
+         const payload = {
+             status: newStatus,
+             spent_hours: hours,
+             completed_at: new Date().toISOString()
+         };
+         fetch(`/api/update_order/${orderId}`, {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify(payload)
+         }).then(r => r.json()).then(res => {
+             if (res.success) {
+                 if (order) {
+                     order.status = newStatus;
+                     order.spent_hours = hours;
+                     order.completed_at = new Date().toISOString();
+                 }
+                 updateSelectColors();
+                 showToast('更新成功', 'success');
+                 const showCompletedChecked = document.getElementById('showCompleted') ? document.getElementById('showCompleted').checked : true;
+                 if ((newStatus === '已完成' || newStatus === '已发货') && !showCompletedChecked) {
+                     setTimeout(() => location.reload(), 800);
+                 }
+             } else {
+                 // 失败则恢复原值
+                 if (oldStatus) {
+                     selectEl.value = oldStatus;
+                     updateSelectColors();
+                 }
+                 showToast('更新失败: ' + res.message, 'error');
+             }
+         }).catch(err => {
+             console.error(err);
+             if (oldStatus) {
+                 selectEl.value = oldStatus;
+                 updateSelectColors();
+             }
+             showToast('网络错误', 'error');
+         });
+     }
 
     // 已完成 -> 已发货 不需要填写耗时，直接更新
     updateOrderField(orderId, 'status', newStatus);
