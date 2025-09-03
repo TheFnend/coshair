@@ -25,11 +25,18 @@
         grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
         gap: var(--gap, 1rem);
     }
+    /* 防止最右列绝对定位圆形图被父容器裁剪 */
+    .completed-section .order-grid { padding-right: 48px; }
     /* 自动模式：根据最小宽度自动填充 */
     .order-grid[data-auto="1"] {
         grid-template-columns: repeat(auto-fit, minmax(var(--min, 240px), 1fr));
     }
 
+    /* 小屏适配：减少右溢出并缩小圆图尺寸，进一步避免裁剪 */
+    @media (max-width: 576px) {
+        .completed-section .order-grid { padding-right: 24px; }
+        .apricot-card .circle-img { right: -18px; width: 180px; height: 180px; }
+    }
     .order-card { 
         /* background: rgba(255, 255, 255, 0.75); 
         border-radius: 15px; padding: 20px; 
@@ -102,6 +109,7 @@
         background: #D4EDDA; 
         border-radius: 999px; padding: 6px 10px; 
         margin-bottom: 10px;
+        font-weight: bold;
     }
     /* 新增：已发货状态配色（背景 #D1ECF1，字体 #0C5460） */
     .apricot-tag.shipped { color: #0C5460; background: #D1ECF1; }
@@ -147,6 +155,26 @@
     #lightboxModal .modal-content { background: transparent; border: 0; }
     #lightboxModal .modal-body { background: rgba(0,0,0,0.88); display:flex; align-items:center; justify-content:center; }
     #lightboxModal img { max-width: 92vw; max-height: 92vh; width:auto; height:auto; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    /* ===== 裁剪弹窗尺寸与圆形可视化 ===== */
+    /* 限制弹窗最大宽度，适配不同屏幕 */
+    #cropperModal .modal-dialog { max-width: min(1000px, 92vw); }
+    /* 防止内容（含边框）溢出 */
+    #cropperModal .modal-content { overflow: hidden; }
+    /* 让 body 不产生额外滚动条，并由内部容器控制尺寸与溢出 */
+    #cropperModal .modal-body { padding: 0; overflow: hidden; }
+    /* 独立包裹层，控制裁剪区域的可视高度与剪裁溢出（与 settings.html 一致） */
+    #cropperModal .crop-container { height: 75vh; max-height: 75vh; overflow: hidden; }
+    /* 让预览图等比缩放以适配容器，避免宽度或高度溢出 */
+    #cropperModal #previewImg { display:block; width: 100%; height: auto; max-width: 100%; max-height: 100%; margin: 0 auto; border-radius: 8px; box-sizing: border-box; object-fit: contain; }
+    /* 裁剪区域显示为圆形（视觉圆形，输出仍为 1:1 方形） */
+    #cropperModal .cropper-view-box, 
+    #cropperModal .cropper-face { border-radius: 50%; }
+    /* 限制 cropper 容器不超过可视区域 */
+    #cropperModal .cropper-container, 
+    #cropperModal .cropper-wrap-box, 
+    #cropperModal .cropper-canvas { max-width: 100% !important; max-height: 100% !important; }
+    /* 确保卡片缩略图的图片边框不会撑出容器 */
+    .order-card .card-thumb, .img-box img.thumb, .circle-img { box-sizing: border-box; }
 </style>
 {% endblock %}
 
@@ -216,7 +244,9 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <img id="previewImg" src="" alt="预览" style="max-width: 100%; border-radius: 8px;">
+            <div class="crop-container">
+              <img id="previewImg" src="" alt="预览">
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -323,33 +353,7 @@ window.triggerFile = function(id) {
 };
 
 // 选择文件后预览
-
-document.addEventListener('change', function(e) {
-  const target = e.target;
-  if (target && target.matches('input[type="file"][data-file]')) {
-    const file = target.files && target.files[0];
-    if (!file) return;
-    selectedFile = file;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      const img = new Image();
-      img.onload = function() {
-        // 简单比例校验（不强制裁剪，仅提示）
-        const w = img.width, h = img.height;
-        const r = (w / h).toFixed(2);
-        const targetR = (ratioW / ratioH).toFixed(2);
-        if (Math.abs(r - targetR) > 0.05) {
-          alert(`建议上传3:4比例图片，当前比例为 ${r}，可能会被自动等比缩放显示。`);
-        }
-        document.getElementById('previewImg').src = ev.target.result;
-        const modal = new bootstrap.Modal(document.getElementById('cropperModal'));
-        modal.show();
-      }
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-});
+// [重复监听器已删除，统一在下方“选择文件后预览（打开裁剪弹窗）”中处理]
 
 
 // ===== 原图灯箱 & 无图点击上传 =====
@@ -361,7 +365,7 @@ document.addEventListener('click', function(e) {
     const lbImg = document.getElementById('lightboxImg');
     if (src && lbImg) {
       lbImg.src = src;
-      const lb = new bootstrap.Modal(document.getElementById('lightboxModal'));
+      const lb = bootstrap.Modal.getOrCreateInstance(document.getElementById('lightboxModal'));
       lb.show();
     }
   }
@@ -405,6 +409,8 @@ document.addEventListener('click', function(e) {
       scalable: false,
       rotatable: false,
       responsive: true,
+      responsive: true,
+      checkOrientation: false
     });
   });
   modalEl.addEventListener('hidden.bs.modal', function(){
@@ -412,6 +418,10 @@ document.addEventListener('click', function(e) {
     const imgEl = document.getElementById('previewImg');
     if (imgEl) imgEl.src = '';
     selectedFile = null;
+    // 关键：强制清理可能残留的遮罩与滚动锁，避免黑屏无法操作
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('padding-right');
   });
 })();
 
@@ -427,7 +437,7 @@ document.addEventListener('change', function(e) {
       const imgEl = document.getElementById('previewImg');
       if (!imgEl) return;
       imgEl.src = ev.target.result;
-      const modal = new bootstrap.Modal(document.getElementById('cropperModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('cropperModal'));
       modal.show();
     };
     reader.readAsDataURL(file);
@@ -459,24 +469,30 @@ confirmBtn?.addEventListener('click', function() {
           placeholder.replaceWith(el);
         }
         // 关闭弹窗 & 清理
-        bootstrap.Modal.getInstance(document.getElementById('cropperModal'))?.hide();
+        const cm = bootstrap.Modal.getOrCreateInstance(document.getElementById('cropperModal'));
+        cm.hide();
         if (cropper) { cropper.destroy(); cropper = null; }
         selectedFile = null;
         currentOrderId = null;
+        // 防御：移除任何可能残留的 backdrop 与 body 状态
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
       } else {
-        alert(data.message || '上传失败');
+        // 失败时不弹出额外提示，保持静默或按需处理
+        console.error('上传失败', data);
       }
     } catch (err) {
       console.error(err);
-      alert('上传失败');
+      // 失败时不弹窗提示
     }
   };
 
   if (cropper) {
     const canvas = cropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingQuality: 'high' });
-    if (!canvas) { alert('无法裁剪该图片'); return; }
+    if (!canvas) { return; }
     canvas.toBlob(async (blob) => {
-      if (!blob) { alert('生成裁剪图失败'); return; }
+      if (!blob) { return; }
       await doUpload(blob, (selectedFile && selectedFile.name) || 'cropped.jpg');
     }, 'image/jpeg', 0.9);
   } else if (selectedFile) {
