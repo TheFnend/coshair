@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 07妙妙屋订单管理系统
 主应用程序文件
@@ -344,12 +344,16 @@ def api_update_order(id):
             try:
                 # 尝试多种格式解析
                 try:
-                    order.completed_at = datetime.fromisoformat(data['completed_at'].replace('Z', '+00:00'))
+                    parsed_dt = datetime.fromisoformat(data['completed_at'].replace('Z', '+00:00'))
                 except Exception:
-                    order.completed_at = datetime.strptime(data['completed_at'], '%Y-%m-%d %H:%M:%S')
+                    parsed_dt = datetime.strptime(data['completed_at'], '%Y-%m-%d %H:%M:%S')
+                # 若包含时区信息，则转换为本地时间并去除tzinfo，统一存储为本地朴素时间
+                if getattr(parsed_dt, 'tzinfo', None) is not None:
+                    parsed_dt = parsed_dt.astimezone().replace(tzinfo=None)
+                order.completed_at = parsed_dt
             except Exception:
-                # 解析失败则回退为当前时间
-                order.completed_at = datetime.utcnow()
+                # 解析失败则回退为当前时间（本地）
+                order.completed_at = datetime.now()
         
         if 'status' in data:
             new_status = data['status']
@@ -357,7 +361,7 @@ def api_update_order(id):
             # 当从 待制作/制作中 -> 已完成/已发货 时，若未显式提供completed_at，则自动写入当前时间
             if old_status in ['待制作', '制作中'] and new_status in ['已完成', '已发货']:
                 if not hasattr(order, 'completed_at') or order.completed_at is None:
-                    order.completed_at = datetime.utcnow()
+                    order.completed_at = datetime.now()
             # 从 已完成 -> 已发货 不修改 completed_at（保持完成时刻）
         
         db.session.commit()
