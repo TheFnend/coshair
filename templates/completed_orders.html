@@ -18,11 +18,24 @@
         isolation: isolate; /* 独立堆叠上下文，提升 backdrop 渲染的一致性 */
     }
 
-    /* 卡片网格布局样式 */
-    .order-grid { }
+    /* 卡片网格布局样式：改为 CSS Grid，支持动态列数与间距 */
+    .order-grid { 
+        display: grid; 
+        grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+        gap: var(--gap, 1rem);
+    }
+    /* 自动模式：根据最小宽度自动填充 */
+    .order-grid[data-auto="1"] {
+        grid-template-columns: repeat(auto-fit, minmax(var(--min, 240px), 1fr));
+    }
+
     .order-card { 
-        background: rgba(255, 255, 255, 0.28); /* 降低不透明度，让毛玻璃更明显 */
-        backdrop-filter: blur(16px) saturate(160%);
+        /* background: rgba(255, 255, 255, 0.75); 
+        border-radius: 15px; padding: 20px; 
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); 
+        backdrop-filter: blur(4px); */
+        background: rgba(255, 255, 255, 0.74); /* 降低不透明度，让毛玻璃更明显 */
+        backdrop-filter: blur(6px) saturate(160%);
         -webkit-backdrop-filter: blur(16px) saturate(160%);
         border: 1px solid rgba(255, 255, 255, 0.35);
         border-radius: 16px;
@@ -33,10 +46,10 @@
     .order-card:hover { 
         box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12); 
         transform: translateY(-2px); 
-        background: rgba(255, 255, 255, 0.34);
+        background: rgba(255, 255, 255, 0.616);
     }
 
-    /* 3:4 比例图片容器 */
+    /* 3:4 比例图片容器（兼容旧结构，缩略图已使用圆形图） */
     .img-box { 
         width: 100%; 
         aspect-ratio: 3 / 4; 
@@ -73,81 +86,129 @@
 
     /* 让顶层容器卡片透明，避免挡住毛玻璃背景 */
     .bg-transparent-override { background: transparent !important; box-shadow: none !important; border: 0 !important; }
+
+    /* ===== Aprycot 卡片风格 ===== */
+    .apricot-card { 
+        /* 不再覆盖背景与边框，继承 order-card 的毛玻璃与透明度 */
+        border-radius: 20px !important; 
+        box-shadow: 0 12px 30px rgba(2, 6, 23, 0.08) !important; 
+        overflow: visible; 
+    }
+    .apricot-content { position: relative; padding-right: 88px !important; }
+    .apricot-tag { 
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 12px; color: #155724; 
+        background: #D4EDDA; 
+        border-radius: 999px; padding: 6px 10px; 
+        margin-bottom: 10px;
+    }
+    /* 新增：已发货状态配色（背景 #D1ECF1，字体 #0C5460） */
+    .apricot-tag.shipped { color: #0C5460; background: #D1ECF1; }
+    .apricot-title { font-weight: 800; font-size: 16px; line-height: 1.2; }
+    .apricot-sub { font-weight: 600;font-size: 13px; color: #2b2b2b; }
+    .apricot-meta { font-weight: 600;font-size: 12px; color: #2b2b2b; margin-top: 2px; }
+    .apricot-price { font-weight: 900; font-size: 20px; color: #f97316; }
+
+    .circle-img { 
+        position: absolute; right: -30px; top: -10px; 
+        width: 230px; height: 230px; border-radius: 100%; 
+        object-fit: cover; background: #f3f4f6; 
+        border: 6px solid #fff; box-shadow: 0 10px 24px rgba(2, 6, 23, 0.15);
+    }
+    .thumb-placeholder { font-size: 12px; color: #94a3b8; text-align: center; }
+
+    .apricot-plus-btn { 
+        position: absolute; bottom: 16px; right: 190px; 
+        width: 36px; height: 36px; border-radius: 50%; border: 0; 
+        display: inline-flex; align-items: center; justify-content: center; 
+        color: #fff; background: #f97316; 
+        box-shadow: 0 10px 20px rgba(249, 115, 22, 0.35);
+    }
+    .apricot-plus-btn:hover { filter: brightness(0.95); }
+
+    /* 布局控制条样式 */
+    .layout-controls { display:flex; align-items:center; gap: 8px; }
+    .layout-controls .form-select { width: 90px; }
+    .layout-controls .form-check { display:flex; align-items:center; gap: 6px; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="completed-section card shadow-sm bg-transparent-override">
   <div class="card-body">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <h5 class="card-title mb-0">已完成/已发货订单</h5>
-      <div class="text-muted">共 {{ orders|length }} 条</div>
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="text-muted">共 {{ orders|length }} 条</div>
+        <div class="layout-controls">
+          <div class="form-check form-switch me-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="autoModeSwitch" checked>
+            <label class="form-check-label small" for="autoModeSwitch">自动</label>
+          </div>
+          <label class="small text-muted">每行</label>
+          <select id="colsSelect" class="form-select form-select-sm" disabled>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+          <label class="small text-muted ms-2">间距</label>
+          <input id="gapRange" type="range" min="8" max="32" step="2" value="16" style="width:140px;">
+          <span id="gapVal" class="small text-muted">16px</span>
+        </div>
+      </div>
     </div>
 
     <!-- 网格卡片布局 -->
-    <div class="order-grid row g-3 g-md-4">
+    <div class="order-grid" id="orderGrid" data-auto="1" style="--min: 240px; --gap: 1rem;">
       {% for o in orders %}
-      <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-        <div class="card h-100 order-card" data-id="{{ o.id }}">
-          <div class="card-body d-flex flex-column">
-            <div class="img-box mb-3">
-              {% if o.order_image %}
-                <img class="thumb" src="{{ url_for('static', filename=o.order_image) }}" alt="order image">
-              {% else %}
-                <div class="placeholder">无图</div>
-              {% endif %}
+      <div class="order-item">
+        <div class="card h-100 order-card apricot-card" data-id="{{ o.id }}">
+          <div class="card-body p-4 position-relative apricot-content">
+            <div class="apricot-tag {% if o.status == '已发货' %}shipped{% endif %}">{{ o.status }}</div>
+            <div class="apricot-title text-truncate" title="{{ o.character }}">{{ o.character }}</div>
+            <div class="apricot-sub text-truncate" title="{{ o.cn }}">{{ o.cn }}</div>
+            <div class="apricot-meta">完成：{{ o.completed_at.strftime('%Y-%m-%d %H:%M') if o.completed_at else '-' }} </div>
+            <div class="apricot-meta">耗时：{{ o.spent_hours if o.spent_hours is not none else '-' }}h</div>
+            <div class="d-flex align-items-center justify-content-between mt-3">
+              <div class="apricot-price">¥ {{ '%.2f'|format(o.final_amount or 0) }}</div>
+              <div class="text-muted small">#{{ o.id }}</div>
             </div>
-
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <div class="fw-bold text-truncate" title="{{ o.cn }}">{{ o.cn }}</div>
-              <span class="badge bg-success">{{ o.status }}</span>
-            </div>
-
-            <div class="text-muted small mb-1 text-truncate" title="{{ o.character }}">角色：{{ o.character }}</div>
-            <div class="text-muted small mb-1">尾款：¥ {{ '%.2f'|format(o.final_amount or 0) }}</div>
-            <div class="text-muted small mb-1">耗时：{{ o.spent_hours if o.spent_hours is not none else '-' }} 小时</div>
-            <div class="text-muted small mb-3">完成：{{ o.completed_at.strftime('%Y-%m-%d %H:%M') if o.completed_at else '-' }}</div>
-
-            <div class="mt-auto d-flex gap-2 flex-wrap">
-              <input class="hidden-input" type="file" accept="image/*" data-file for="file-{{ o.id }}" id="file-{{ o.id }}">
-              <button class="btn btn-sm btn-primary" onclick="triggerFile({{ o.id }})">
-                <i class="bi bi-upload"></i> 上传图片
-              </button>
-              {% if o.order_image %}
-              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('static', filename=o.order_image) }}" target="_blank">
-                查看原图
-              </a>
-              {% endif %}
-            </div>
+            {% if o.order_image %}
+              <img class="card-thumb circle-img" src="{{ url_for('static', filename=o.order_image) }}" alt="thumb">
+            {% else %}
+              <div class="thumb-placeholder position-absolute" style="right: -18px; top: -18px; width: 150px; height: 150px; display:flex; align-items:center; justify-content:center; border-radius: 90%; background:#f3f4f6; border: 6px solid #fff; box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);">无图</div>
+            {% endif %}
+            <button class="apricot-plus-btn" title="上传图片" onclick="triggerFile({{ o.id }})">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+            <input id="file-{{ o.id }}" data-file type="file" class="hidden-input" accept="image/*">
           </div>
         </div>
       </div>
       {% endfor %}
     </div>
-  </div>
-</div>
 
-<!-- 预览裁剪 Modal（建议 3:4） 放入 content 内，保证 DOM 可用 -->
-<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex justify-content-center">
-          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
-            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
+    <!-- 预览与裁剪 Modal（已存在于 content 内，保证脚本可见） -->
+    <div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">图片预览</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <img id="previewImg" src="" alt="预览" style="max-width: 100%; border-radius: 8px;">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
           </div>
         </div>
-        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -159,12 +220,74 @@ let currentOrderId = null;
 let selectedFile = null;
 const ratioW = 3, ratioH = 4;
 
+// 将裁剪预览 Modal 迁移到 <body>，避免被 backdrop 遮挡（因父层 stacking context 导致）
+document.addEventListener('DOMContentLoaded', function () {
+  const modalEl = document.getElementById('cropperModal');
+  if (modalEl && modalEl.parentNode !== document.body) {
+    document.body.appendChild(modalEl);
+  }
+});
+
+// ===== 布局控制逻辑 =====
+(function initLayoutControls() {
+  const grid = document.getElementById('orderGrid');
+  const colsSelect = document.getElementById('colsSelect');
+  const gapRange = document.getElementById('gapRange');
+  const gapVal = document.getElementById('gapVal');
+  const autoSwitch = document.getElementById('autoModeSwitch');
+
+  // 读取本地偏好
+  const savedAuto = localStorage.getItem('completed_auto');
+  const savedCols = localStorage.getItem('completed_cols');
+  const savedGap = localStorage.getItem('completed_gap');
+
+  if (savedGap) {
+    gapRange.value = savedGap;
+  }
+  if (savedCols) {
+    colsSelect.value = savedCols;
+  }
+  if (savedAuto !== null) {
+    autoSwitch.checked = savedAuto === '1';
+  }
+
+  function applyLayout() {
+    const isAuto = autoSwitch.checked;
+    const gapPx = parseInt(gapRange.value, 10) || 16;
+    gapVal.textContent = gapPx + 'px';
+    grid.style.setProperty('--gap', gapPx + 'px');
+
+    if (isAuto) {
+      grid.dataset.auto = '1';
+      colsSelect.disabled = true;
+    } else {
+      grid.dataset.auto = '0';
+      colsSelect.disabled = false;
+      const cols = parseInt(colsSelect.value, 10) || 4;
+      grid.style.setProperty('--cols', cols);
+    }
+
+    // 保存设置
+    localStorage.setItem('completed_auto', isAuto ? '1' : '0');
+    localStorage.setItem('completed_cols', colsSelect.value);
+    localStorage.setItem('completed_gap', String(gapPx));
+  }
+
+  autoSwitch.addEventListener('change', applyLayout);
+  colsSelect.addEventListener('change', applyLayout);
+  gapRange.addEventListener('input', applyLayout);
+
+  applyLayout();
+})();
+
 // 绑定到 window，确保可被内联 onclick 调用
 window.triggerFile = function(id) {
   currentOrderId = id;
   const input = document.getElementById('file-' + id);
   if (input) input.click();
 };
+
+// 选择文件后预览
 
 document.addEventListener('change', function(e) {
   const target = e.target;
@@ -203,15 +326,15 @@ confirmBtn?.addEventListener('click', async function() {
     const resp = await fetch(`/api/upload_order_image/${currentOrderId}`, { method: 'POST', body: fd });
     const data = await resp.json();
     if (data.success) {
-      // 更新对应卡片缩略图
+      // 更新对应卡片缩略图（兼容新旧结构）
       const card = document.querySelector(`.order-card[data-id="${currentOrderId}"]`);
-      const img = card?.querySelector('.img-box img');
-      const placeholder = card?.querySelector('.img-box .placeholder');
+      const img = card?.querySelector('.card-thumb') || card?.querySelector('.img-box img');
+      const placeholder = card?.querySelector('.thumb-placeholder') || card?.querySelector('.img-box .placeholder');
       const url = data.url + `?t=${Date.now()}`;
       if (img) { img.src = url; }
       else if (placeholder) {
         const el = document.createElement('img');
-        el.className = 'thumb';
+        el.className = 'card-thumb circle-img';
         el.src = url;
         placeholder.replaceWith(el);
       }
@@ -228,27 +351,3 @@ confirmBtn?.addEventListener('click', async function() {
 });
 </script>
 {% endblock %}
-
-<!-- 预览裁剪 Modal（建议 3:4） -->
-<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex justify-content-center">
-          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
-            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
-          </div>
-        </div>
-        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
-      </div>
-    </div>
-  </div>
-</div>
