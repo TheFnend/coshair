@@ -126,6 +126,31 @@
     </div>
   </div>
 </div>
+
+<!-- 预览裁剪 Modal（建议 3:4） 放入 content 内，保证 DOM 可用 -->
+<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-center">
+          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
+            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
+          </div>
+        </div>
+        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
