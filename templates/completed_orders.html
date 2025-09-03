@@ -4,110 +4,142 @@
 
 {% block extra_css %}
 <style>
+    /* 页面级背景容器：直接设置背景，便于子元素 backdrop-filter 生效 */
+    .completed-section { 
+        position: relative; 
+        overflow: hidden; 
+        /* 渐变与噪点纹理，增强毛玻璃层次感 */
+        background:
+          radial-gradient(1200px 600px at -10% 0%, rgba(99,102,241,0.18), transparent 40%),
+          radial-gradient(900px 700px at 110% 10%, rgba(236,72,153,0.18), transparent 42%),
+          linear-gradient(180deg, #f6f7fb 0%, #eef2f7 100%);
+        background-attachment: fixed;
+        background-size: cover;
+        isolation: isolate; /* 独立堆叠上下文，提升 backdrop 渲染的一致性 */
+    }
+
+    /* 卡片网格布局样式 */
+    .order-grid { }
+    .order-card { 
+        background: rgba(255, 255, 255, 0.28); /* 降低不透明度，让毛玻璃更明显 */
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
+        transition: box-shadow .2s ease, transform .2s ease, background-color .2s ease;
+        background-clip: padding-box;
+    }
+    .order-card:hover { 
+        box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12); 
+        transform: translateY(-2px); 
+        background: rgba(255, 255, 255, 0.34);
+    }
+
+    /* 3:4 比例图片容器 */
+    .img-box { 
+        width: 100%; 
+        aspect-ratio: 3 / 4; 
+        background: rgba(243, 245, 248, 0.5); 
+        border-radius: 12px; 
+        overflow: hidden; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        position: relative;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(255,255,255,0.35);
+    }
+    .img-box img.thumb { width: 100%; height: 100%; object-fit: cover; display:block; }
+    .img-box .placeholder { 
+        width: 100%; height: 100%; 
+        border: 1px dashed rgba(217, 223, 231, 0.8); 
+        border-radius: 12px; 
+        color:#94a3b8; 
+        font-size: 13px; 
+        display:flex; align-items:center; justify-content:center; 
+        background: rgba(249, 250, 251, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+
+    /* 旧样式兼容保留（不再用于卡片缩略图） */
     .order-table th, .order-table td { vertical-align: middle; }
-    .thumb { width: 90px; height: 120px; object-fit: cover; border-radius: 6px; background:#f3f5f8; }
+    .thumb { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; background:#f3f5f8; }
     .hidden-input { display: none; }
     .img-uploader { display:flex; align-items:center; gap:10px; }
     .img-uploader .btn { white-space: nowrap; }
+
+    /* 让顶层容器卡片透明，避免挡住毛玻璃背景 */
+    .bg-transparent-override { background: transparent !important; box-shadow: none !important; border: 0 !important; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
+<div class="completed-section card shadow-sm bg-transparent-override">
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="card-title mb-0">已完成/已发货订单</h5>
       <div class="text-muted">共 {{ orders|length }} 条</div>
     </div>
 
-    <div class="table-responsive">
-      <table class="table table-hover order-table">
-        <thead class="table-light">
-          <tr>
-            <th>图片</th>
-            <th>CN</th>
-            <th>角色</th>
-            <th>尾款</th>
-            <th>耗时(小时)</th>
-            <th>状态</th>
-            <th>完成时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for o in orders %}
-          <tr data-id="{{ o.id }}">
-            <td style="width:110px;">
+    <!-- 网格卡片布局 -->
+    <div class="order-grid row g-3 g-md-4">
+      {% for o in orders %}
+      <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+        <div class="card h-100 order-card" data-id="{{ o.id }}">
+          <div class="card-body d-flex flex-column">
+            <div class="img-box mb-3">
               {% if o.order_image %}
                 <img class="thumb" src="{{ url_for('static', filename=o.order_image) }}" alt="order image">
               {% else %}
-                <div class="text-muted" style="width:90px;height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed #d9dfe7;border-radius:6px;">无图</div>
+                <div class="placeholder">无图</div>
               {% endif %}
-            </td>
-            <td>{{ o.cn }}</td>
-            <td>{{ o.character }}</td>
-            <td>¥ {{ '%.2f'|format(o.final_amount or 0) }}</td>
-            <td>{{ o.spent_hours if o.spent_hours is not none else '-' }}</td>
-            <td><span class="badge bg-success">{{ o.status }}</span></td>
-            <td>{{ o.completed_at.strftime('%Y-%m-%d %H:%M') if o.completed_at else '-' }}</td>
-            <td>
-              <div class="img-uploader">
-                <input class="hidden-input" type="file" accept="image/*" data-file for="file-{{ o.id }}" id="file-{{ o.id }}">
-                <button class="btn btn-sm btn-outline-primary" onclick="triggerFile({{ o.id }})">
-                  <i class="bi bi-upload"></i> 上传图片
-                </button>
-                {% if o.order_image %}
-                <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('static', filename=o.order_image) }}" target="_blank">
-                  查看原图
-                </a>
-                {% endif %}
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
+            </div>
 
-<!-- 简单的 3:4 约束：提示 + 预览裁剪框比例限制由 CSS 保证可视比例，后台未强制裁剪，仅存储 -->
-<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex justify-content-center">
-          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
-            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div class="fw-bold text-truncate" title="{{ o.cn }}">{{ o.cn }}</div>
+              <span class="badge bg-success">{{ o.status }}</span>
+            </div>
+
+            <div class="text-muted small mb-1 text-truncate" title="{{ o.character }}">角色：{{ o.character }}</div>
+            <div class="text-muted small mb-1">尾款：¥ {{ '%.2f'|format(o.final_amount or 0) }}</div>
+            <div class="text-muted small mb-1">耗时：{{ o.spent_hours if o.spent_hours is not none else '-' }} 小时</div>
+            <div class="text-muted small mb-3">完成：{{ o.completed_at.strftime('%Y-%m-%d %H:%M') if o.completed_at else '-' }}</div>
+
+            <div class="mt-auto d-flex gap-2 flex-wrap">
+              <input class="hidden-input" type="file" accept="image/*" data-file for="file-{{ o.id }}" id="file-{{ o.id }}">
+              <button class="btn btn-sm btn-primary" onclick="triggerFile({{ o.id }})">
+                <i class="bi bi-upload"></i> 上传图片
+              </button>
+              {% if o.order_image %}
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('static', filename=o.order_image) }}" target="_blank">
+                查看原图
+              </a>
+              {% endif %}
+            </div>
           </div>
         </div>
-        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
-      </div>
+      {% endfor %}
     </div>
   </div>
 </div>
-
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
 let currentOrderId = null;
 let selectedFile = null;
 const ratioW = 3, ratioH = 4;
 
-function triggerFile(id) {
+// 绑定到 window，确保可被内联 onclick 调用
+window.triggerFile = function(id) {
   currentOrderId = id;
   const input = document.getElementById('file-' + id);
   if (input) input.click();
-}
+};
 
 document.addEventListener('change', function(e) {
   const target = e.target;
@@ -146,10 +178,10 @@ confirmBtn?.addEventListener('click', async function() {
     const resp = await fetch(`/api/upload_order_image/${currentOrderId}`, { method: 'POST', body: fd });
     const data = await resp.json();
     if (data.success) {
-      // 更新对应行缩略图
-      const row = document.querySelector(`tr[data-id="${currentOrderId}"]`);
-      const img = row?.querySelector('img.thumb');
-      const placeholder = row?.querySelector('div[style*="dashed"]');
+      // 更新对应卡片缩略图
+      const card = document.querySelector(`.order-card[data-id="${currentOrderId}"]`);
+      const img = card?.querySelector('.img-box img');
+      const placeholder = card?.querySelector('.img-box .placeholder');
       const url = data.url + `?t=${Date.now()}`;
       if (img) { img.src = url; }
       else if (placeholder) {
@@ -171,3 +203,27 @@ confirmBtn?.addEventListener('click', async function() {
 });
 </script>
 {% endblock %}
+
+<!-- 预览裁剪 Modal（建议 3:4） -->
+<div class="modal fade" id="cropperModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">预览与裁剪（建议3:4）</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex justify-content-center">
+          <div style="width:360px;height:480px;border:1px dashed #d9dfe7;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#f9fafb;overflow:hidden;">
+            <img id="previewImg" style="max-width:100%;height:auto;" alt="preview"/>
+          </div>
+        </div>
+        <div class="small text-muted mt-2 text-center">请尽量上传/裁剪为 3:4 比例（例如 900x1200）。</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmUploadBtn">确认上传</button>
+      </div>
+    </div>
+  </div>
+</div>
