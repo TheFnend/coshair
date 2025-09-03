@@ -1,6 +1,6 @@
 {% extends 'dashboard_base.html' %}
-{% block title %}已完成订单 - 07妙妙屋订单管理系统{% endblock %}
-{% block page_title %}已完成订单{% endblock %}
+{% block title %}完成订单 - 07妙妙屋订单管理系统{% endblock %}
+{% block page_title %}完成订单{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
@@ -185,11 +185,15 @@
       <h5 class="card-title mb-0">已完成/已发货订单</h5>
       <div class="d-flex align-items-center gap-3 flex-wrap">
         <div class="text-muted">共 {{ orders|length }} 条</div>
-        <div class="layout-controls">
-          <div class="form-check form-switch me-2">
-            <input class="form-check-input" type="checkbox" role="switch" id="autoModeSwitch" checked>
-            <label class="form-check-label small" for="autoModeSwitch">自动</label>
-          </div>
+       <div class="input-group input-group-sm" style="width: 240px;">
+         <span class="input-group-text"><i class="bi bi-search"></i></span>
+         <input id="orderSearch" type="text" class="form-control" placeholder="搜索 CN / 角色">
+       </div>
+         <div class="layout-controls">
+           <div class="form-check form-switch me-2">
+             <input class="form-check-input" type="checkbox" role="switch" id="autoModeSwitch" checked>
+             <label class="form-check-label small" for="autoModeSwitch">自动</label>
+           </div>
           <label class="small text-muted">每行</label>
           <select id="colsSelect" class="form-select form-select-sm" disabled>
             <option value="2">2</option>
@@ -344,13 +348,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
   applyLayout();
 })();
+// ===== 搜索过滤（匹配 角色 与 CN） =====
+(function initOrderSearch(){
+  const input = document.getElementById('orderSearch');
+  const grid = document.getElementById('orderGrid');
+  if (!input || !grid) return;
 
-// 绑定到 window，确保可被内联 onclick 调用
-window.triggerFile = function(id) {
-  currentOrderId = id;
-  const input = document.getElementById('file-' + id);
-  if (input) input.click();
-};
+  function applySearch(){
+    const q = input.value.trim().toLowerCase();
+    const items = grid.querySelectorAll('.order-item');
+    items.forEach(item => {
+      const title = item.querySelector('.apricot-title')?.textContent || '';
+      const cn = item.querySelector('.apricot-sub')?.textContent || '';
+      const hay = (title + ' ' + cn).toLowerCase();
+      const show = q === '' || hay.includes(q);
+      item.style.display = show ? '' : 'none';
+    });
+  }
+
+  input.addEventListener('input', applySearch);
+})();
+
+ // 绑定到 window，确保可被内联 onclick 调用
+ window.triggerFile = function(id) {
+   currentOrderId = id;
+   const input = document.getElementById('file-' + id);
+   if (input) input.click();
+ };
 
 // 选择文件后预览
 // [重复监听器已删除，统一在下方“选择文件后预览（打开裁剪弹窗）”中处理]
