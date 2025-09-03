@@ -175,6 +175,12 @@
     #cropperModal .cropper-canvas { max-width: 100% !important; max-height: 100% !important; }
     /* 确保卡片缩略图的图片边框不会撑出容器 */
     .order-card .card-thumb, .img-box img.thumb, .circle-img { box-sizing: border-box; }
+
+    /* ===== 统计卡片基础样式（与 dashboard 对齐） ===== */
+    .stats-card { border-radius: 15px; backdrop-filter: blur(10px); border: none; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+    .stats-icon { font-size: 2.5rem; }
+    .stats-number { font-weight: 700; font-size: 1.25rem; }
+    .stats-label { opacity: .95; }
 </style>
 {% endblock %}
 
@@ -182,7 +188,7 @@
 <div class="completed-section card shadow-sm bg-transparent-override">
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-      <h5 class="card-title mb-0">已完成/已发货订单</h5>
+      <h5 class="card-title mb-0"> </h5>
       <div class="d-flex align-items-center gap-3 flex-wrap">
         <div class="text-muted">共 {{ orders|length }} 条</div>
        <div class="input-group input-group-sm" style="width: 240px;">
@@ -192,7 +198,7 @@
          <div class="layout-controls">
            <div class="form-check form-switch me-2">
              <input class="form-check-input" type="checkbox" role="switch" id="autoModeSwitch" checked>
-             <label class="form-check-label small" for="autoModeSwitch">自动</label>
+             <label class="small text-muted" for="autoModeSwitch">自动</label>
            </div>
           <label class="small text-muted">每行</label>
           <select id="colsSelect" class="form-select form-select-sm" disabled>
@@ -205,6 +211,47 @@
           <label class="small text-muted ms-2">间距</label>
           <input id="gapRange" type="range" min="8" max="32" step="2" value="16" style="width:140px;">
           <span id="gapVal" class="small text-muted">16px</span>
+        </div>
+      </div>
+    </div>
+
+    {# 统计：总金额、总耗时、平均时薪 #}
+    {% set total_amount = orders | selectattr('final_amount', 'ne', None) | sum(attribute='final_amount', start=0) %}
+    {% set total_hours = orders | selectattr('spent_hours', 'ne', None) | sum(attribute='spent_hours', start=0) %}
+    {% set avg_hourly = (total_amount / total_hours) if total_hours else None %}
+
+    <div class="row mb-4">
+      <div class="col-lg-4 col-md-6 col-sm-12 mb-3">
+        <div class="card stats-card" style="background: rgba(237, 221, 195, 0.85); color: #333;">
+          <div class="card-body d-flex align-items-center">
+            <div class="stats-icon me-3"><i class="bi bi-currency-yen"></i></div>
+            <div>
+              <h5 class="stats-number mb-1">¥{{ "%.0f"|format(total_amount) }}</h5>
+              <p class="stats-label mb-0">总金额</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4 col-md-6 col-sm-12 mb-3">
+        <div class="card stats-card" style="background: rgba(217, 79, 51, 0.85); color: #fff;">
+          <div class="card-body d-flex align-items-center">
+            <div class="stats-icon me-3"><i class="bi bi-stopwatch"></i></div>
+            <div>
+              <h5 class="stats-number mb-1">{{ "%.1f"|format(total_hours or 0) }} h</h5>
+              <p class="stats-label mb-0">总耗时</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4 col-md-6 col-sm-12 mb-3">
+        <div class="card stats-card" style="background: rgba(78, 171, 144, 0.85); color: #fff;">
+          <div class="card-body d-flex align-items-center">
+            <div class="stats-icon me-3"><i class="bi bi-cash-coin"></i></div>
+            <div>
+              <h5 class="stats-number mb-1">{% if avg_hourly %}¥{{ "%.2f"|format(avg_hourly) }}{% else %}-{% endif %}</h5>
+              <p class="stats-label mb-0">平均时薪</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
