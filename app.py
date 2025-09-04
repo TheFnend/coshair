@@ -654,7 +654,7 @@ def calendar():
 @app.route('/revenue')
 def revenue():
     """
-    收入统计页面
+    收入统计页面 - 默认显示本月数据
     
     功能：
     - 显示总收入和各项统计
@@ -663,38 +663,51 @@ def revenue():
     """
     from collections import defaultdict
     import calendar
+    from datetime import datetime
     
-    # 获取所有已完成的订单
-    completed_orders = Order.query.filter(Order.status.in_(['已完成', '已发货'])).all()
+    # 获取当前日期，默认显示本月数据
+    now = datetime.now()
+    start_date = now.replace(day=1)
     
-    # 计算总收入
-    total_revenue = sum(order.final_amount for order in completed_orders)
+    # 获取本月已完成的订单（用于收入概览）
+    completed_orders_current_month = Order.query.filter(
+        Order.status.in_(['已完成', '已发货']),
+        Order.needed_date >= start_date.date()
+    ).all()
     
-    # 计算平均订单价值
-    avg_order_value = total_revenue / len(completed_orders) if completed_orders else 0
+    # 获取所有已完成的订单（用于月度统计和平台统计）
+    all_completed_orders = Order.query.filter(Order.status.in_(['已完成', '已发货'])).all()
+    
+    # 计算总收入（本月）
+    total_revenue = sum(order.final_amount for order in completed_orders_current_month)
+    
+    # 计算平均订单价值（本月）
+    avg_order_value = total_revenue / len(completed_orders_current_month) if completed_orders_current_month else 0
     
     # 计算待收款订单
     pending_orders_list = Order.query.filter(Order.status.notin_(['已完成', '已发货', '已取消'])).all()
     pending_orders = len(pending_orders_list)
     pending_revenue = sum(order.final_amount for order in pending_orders_list)
     
-    # 按平台统计收入
+    # 按平台统计收入（本月）
     platform_revenue = defaultdict(lambda: {'revenue': 0, 'orders': 0})
-    for order in completed_orders:
+    for order in completed_orders_current_month:
         platform_revenue[order.contact]['revenue'] += order.final_amount
         platform_revenue[order.contact]['orders'] += 1
     
-    # 格式化平台收入数据
+    # 确保所有平台都显示，即使没有订单也显示0
+    all_platforms = ['QQ', '微信', '闲鱼']
     platform_revenue_formatted = {}
-    for platform, data in platform_revenue.items():
+    for platform in all_platforms:
+        data = platform_revenue.get(platform, {'revenue': 0, 'orders': 0})
         platform_revenue_formatted[platform] = {
             'revenue': f"{data['revenue']:.0f}",
             'orders': data['orders']
         }
     
-    # 按月统计收入
+    # 按月统计收入（使用所有历史订单）
     monthly_revenue = defaultdict(lambda: {'revenue': 0, 'orders': 0})
-    for order in completed_orders:
+    for order in all_completed_orders:
         month_key = order.needed_date.strftime('%Y-%m')
         monthly_revenue[month_key]['revenue'] += order.final_amount
         monthly_revenue[month_key]['orders'] += 1
@@ -729,15 +742,100 @@ def revenue():
         
         prev_revenue = data['revenue']
     
+    # 计算平均时薪和总工作时间（当月）
+    total_hours_current_month = sum(order.spent_hours for order in completed_orders_current_month if order.spent_hours)
+    avg_hourly_rate = total_revenue / total_hours_current_month if total_hours_current_month > 0 else 0
+    
     return render_template('revenue.html',
                          total_revenue=f"{total_revenue:.0f}",
-                         completed_orders=len(completed_orders),
+                         completed_orders=len(completed_orders_current_month),
                          avg_order_value=f"{avg_order_value:.0f}",
+                         avg_hourly_rate=f"{avg_hourly_rate:.1f}",
+                         total_hours=f"{total_hours_current_month:.1f}",
                          pending_orders=pending_orders,
                          pending_revenue=f"{pending_revenue:.0f}",
                          platform_revenue=platform_revenue_formatted,
                          monthly_data=monthly_data,
                          monthly_chart_data=monthly_chart_data)
+
+@app.route('/api/revenue/<period>')
+def api_revenue(period):
+    """
+    根据时间段返回收入数据的API
+    
+    参数:
+    - period: 时间段 ('month', 'quarter', 'year', 'all')
+    """
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    import calendar
+    
+    # 获取当前日期
+    now = datetime.now()
+    
+    # 根据时间段筛选订单
+    if period == 'month':
+        start_date = now.replace(day=1)
+        completed_orders = Order.query.filter(
+            Order.status.in_(['已完成', '已发货']),
+            Order.needed_date >= start_date.date()
+        ).all()
+    elif period == 'quarter':
+        quarter = (now.month - 1) // 3 + 1
+        start_month = (quarter - 1) * 3 + 1
+        start_date = now.replace(month=start_month, day=1)
+        completed_orders = Order.query.filter(
+            Order.status.in_(['已完成', '已发货']),
+            Order.needed_date >= start_date.date()
+        ).all()
+    elif period == 'year':
+        start_date = now.replace(month=1, day=1)
+        completed_orders = Order.query.filter(
+            Order.status.in_(['已完成', '已发货']),
+            Order.needed_date >= start_date.date()
+        ).all()
+    else:  # 'all'
+        completed_orders = Order.query.filter(Order.status.in_(['已完成', '已发货'])).all()
+    
+    # 计算统计数据
+    total_revenue = sum(order.final_amount for order in completed_orders)
+    avg_order_value = total_revenue / len(completed_orders) if completed_orders else 0
+    
+    # 计算待收款订单（不受时间段影响）
+    pending_orders_list = Order.query.filter(Order.status.notin_(['已完成', '已发货', '已取消'])).all()
+    pending_orders = len(pending_orders_list)
+    pending_revenue = sum(order.final_amount for order in pending_orders_list)
+    
+    # 按平台统计收入
+    platform_revenue = defaultdict(lambda: {'revenue': 0, 'orders': 0})
+    for order in completed_orders:
+        platform_revenue[order.contact]['revenue'] += order.final_amount
+        platform_revenue[order.contact]['orders'] += 1
+    
+    # 确保所有平台都显示，即使没有订单也显示0
+    all_platforms = ['QQ', '微信', '闲鱼']
+    platform_revenue_formatted = {}
+    for platform in all_platforms:
+        data = platform_revenue.get(platform, {'revenue': 0, 'orders': 0})
+        platform_revenue_formatted[platform] = {
+            'revenue': f"{data['revenue']:.0f}",
+            'orders': data['orders']
+        }
+    
+    # 计算平均时薪和总工作时间
+    total_hours = sum(order.spent_hours for order in completed_orders if order.spent_hours)
+    avg_hourly_rate = total_revenue / total_hours if total_hours > 0 else 0
+    
+    return jsonify({
+        'total_revenue': f"{total_revenue:.0f}",
+        'completed_orders': len(completed_orders),
+        'avg_order_value': f"{avg_order_value:.0f}",
+        'avg_hourly_rate': f"{avg_hourly_rate:.1f}",
+        'total_hours': f"{total_hours:.1f}",
+        'pending_orders': pending_orders,
+        'pending_revenue': f"{pending_revenue:.0f}",
+        'platform_revenue': platform_revenue_formatted
+    })
 
 # 添加模板上下文处理器
 # ==================== 模板上下文处理器 ====================

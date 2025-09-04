@@ -272,20 +272,28 @@
     
     <div class="revenue-breakdown">
         <div class="breakdown-item">
-            <div class="breakdown-value primary">{{ completed_orders }}</div>
+            <div class="breakdown-value primary" id="completedOrders" style="color: #4e9e87;">{{ completed_orders }}</div>
             <div class="breakdown-label">已完成订单</div>
         </div>
         <div class="breakdown-item">
-            <div class="breakdown-value success">¥{{ avg_order_value }}</div>
+            <div class="breakdown-value success" id="avgOrderValue" style="color: #8b9894;">¥{{ avg_order_value }}</div>
             <div class="breakdown-label">平均订单价值</div>
         </div>
         <div class="breakdown-item">
-            <div class="breakdown-value warning">{{ pending_orders }}</div>
+            <div class="breakdown-value warning" id="pendingOrders" style="color: #d9c9b4;">{{ pending_orders }}</div>
             <div class="breakdown-label">待收款订单</div>
         </div>
         <div class="breakdown-item">
-            <div class="breakdown-value info">¥{{ pending_revenue }}</div>
+            <div class="breakdown-value info" id="pendingRevenue" style="color: #dbb26d;">¥{{ pending_revenue }}</div>
             <div class="breakdown-label">待收款金额</div>
+        </div>
+        <div class="breakdown-item">
+            <div class="breakdown-value secondary" id="totalHours" style="color: #c54f37;">{{ total_hours }}h</div>
+            <div class="breakdown-label">总工作时间</div>
+        </div>
+                <div class="breakdown-item">
+            <div class="breakdown-value info" id="avgHourlyRate" style="color: #a1625c;">¥{{ avg_hourly_rate }}</div>
+            <div class="breakdown-label">平均时薪</div>
         </div>
     </div>
 </div>
@@ -317,6 +325,22 @@
         </div>
         {% endif %}
         {% endfor %}
+    </div>
+    
+    <!-- 平台分布饼图 -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="chart-container" style="height: 350px; padding: 10px;">
+                <h5 class="text-center mb-3">订单数量分布</h5>
+                <canvas id="ordersPieChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container" style="height: 350px; padding: 10px;">
+                <h5 class="text-center mb-3">收入分布</h5>
+                <canvas id="revenuePieChart"></canvas>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -386,9 +410,12 @@
 <script>
 // 收入数据
 const revenueData = {{ monthly_chart_data|safe }};
+const platformData = {{ platform_revenue|safe }};
 
 // 初始化图表
 let revenueChart;
+let ordersPieChart;
+let revenuePieChart;
 
 function initChart() {
     const ctx = document.getElementById('revenueChart').getContext('2d');
@@ -451,6 +478,143 @@ function initChart() {
     });
 }
 
+// 初始化饼图
+function initPieCharts() {
+    // 准备平台数据
+    const platforms = ['QQ', '微信', '闲鱼'];
+    const platformColors = {
+        'QQ': '#dc3545',
+        '微信': '#28a745', 
+        '闲鱼': '#ffc107'
+    };
+    
+    const ordersData = [];
+    const revenueData = [];
+    const colors = [];
+    const labels = [];
+    
+    platforms.forEach(platform => {
+        if (platformData[platform]) {
+            labels.push(platform);
+            ordersData.push(platformData[platform].orders);
+            revenueData.push(platformData[platform].revenue);
+            colors.push(platformColors[platform]);
+        }
+    });
+    
+    // 订单数量分布饼图
+    const ordersCtx = document.getElementById('ordersPieChart').getContext('2d');
+    ordersPieChart = new Chart(ordersCtx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: ordersData,
+                backgroundColor: colors,
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                 legend: {
+                     position: 'bottom',
+                     labels: {
+                         padding: 10,
+                         usePointStyle: true,
+                         boxWidth: 12
+                     }
+                 },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return context.label + ': ' + context.parsed + '个订单 (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // 收入分布饼图
+    const revenueCtx = document.getElementById('revenuePieChart').getContext('2d');
+    revenuePieChart = new Chart(revenueCtx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: revenueData,
+                backgroundColor: colors,
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                 legend: {
+                     position: 'bottom',
+                     labels: {
+                         padding: 10,
+                         usePointStyle: true,
+                         boxWidth: 12
+                     }
+                 },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return context.label + ': ¥' + context.parsed + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 更新饼图数据
+function updatePieCharts(data) {
+    const platforms = ['QQ', '微信', '闲鱼'];
+    const platformColors = {
+        'QQ': '#dc3545',
+        '微信': '#28a745', 
+        '闲鱼': '#ffc107'
+    };
+    
+    const ordersData = [];
+    const revenueData = [];
+    const colors = [];
+    const labels = [];
+    
+    platforms.forEach(platform => {
+        if (data.platform_revenue[platform] && (data.platform_revenue[platform].orders > 0 || data.platform_revenue[platform].revenue > 0)) {
+            labels.push(platform);
+            ordersData.push(data.platform_revenue[platform].orders);
+            revenueData.push(data.platform_revenue[platform].revenue);
+            colors.push(platformColors[platform]);
+        }
+    });
+    
+    // 更新订单数量饼图
+    ordersPieChart.data.labels = labels;
+    ordersPieChart.data.datasets[0].data = ordersData;
+    ordersPieChart.data.datasets[0].backgroundColor = colors;
+    ordersPieChart.update();
+    
+    // 更新收入分布饼图
+    revenuePieChart.data.labels = labels;
+    revenuePieChart.data.datasets[0].data = revenueData;
+    revenuePieChart.data.datasets[0].backgroundColor = colors;
+    revenuePieChart.update();
+}
+
 // 切换时间周期
 function changePeriod(period) {
     // 更新按钮状态
@@ -469,13 +633,48 @@ function changePeriod(period) {
     
     document.getElementById('periodText').textContent = periodTexts[period];
     
-    // 这里可以添加AJAX请求来获取不同时期的数据
-    // 暂时使用静态数据演示
+    // 发送AJAX请求获取对应时期的数据
+    fetch(`/api/revenue/${period}`)
+        .then(response => response.json())
+        .then(data => {
+            // 更新总收入
+            document.getElementById('totalRevenue').textContent = `¥${data.total_revenue}`;
+            
+            // 更新统计数据
+            document.getElementById('completedOrders').textContent = data.completed_orders;
+            document.getElementById('avgOrderValue').textContent = `¥${data.avg_order_value}`;
+            document.getElementById('avgHourlyRate').textContent = `¥${data.avg_hourly_rate}`;
+            document.getElementById('totalHours').textContent = `${data.total_hours}h`;
+            document.getElementById('pendingOrders').textContent = data.pending_orders;
+            document.getElementById('pendingRevenue').textContent = `¥${data.pending_revenue}`;
+            
+            // 更新平台收入数据
+            const platformCards = document.querySelectorAll('.platform-card');
+            platformCards.forEach(card => {
+                const platformName = card.querySelector('.platform-name').textContent;
+                if (data.platform_revenue[platformName]) {
+                    const platformData = data.platform_revenue[platformName];
+                    card.querySelector('.platform-amount').textContent = `¥${platformData.revenue}`;
+                    card.querySelector('.platform-orders').textContent = `${platformData.orders}个订单`;
+                } else {
+                    // 如果该时间段没有该平台的数据，显示0
+                    card.querySelector('.platform-amount').textContent = '¥0';
+                    card.querySelector('.platform-orders').textContent = '0个订单';
+                }
+            });
+            
+            // 更新饼图
+            updatePieCharts(data);
+        })
+        .catch(error => {
+            console.error('获取收入数据失败:', error);
+        });
 }
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     initChart();
+    initPieCharts();
 });
 </script>
 {% endblock %}
