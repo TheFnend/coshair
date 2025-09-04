@@ -313,23 +313,33 @@ function generateCalendar(year, month) {
     title.textContent = `${year}年${String(month + 1).padStart(2, '0')}月`;
 
     // 统计当月订单数量（按 needed_date 所在月份）
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
     const stats = { total: 0, completed: 0, overdue: 0, veryUrgent: 0, urgent: 0, shipped: 0 };
-
 
     orders.forEach(o => {
         if (!o.needed_date) return;
-        const d = new Date(o.needed_date);
-        if (d >= monthStart && d <= monthEnd) {
+        
+        // 解析订单日期，确保正确处理日期字符串
+        const orderDate = new Date(o.needed_date + 'T00:00:00');
+        const orderYear = orderDate.getFullYear();
+        const orderMonth = orderDate.getMonth();
+        
+        // 检查是否为当前查看的月份
+        if (orderYear === year && orderMonth === month) {
             stats.total++;
-            const daysLeft = Math.ceil((d - new Date()) / (1000*60*60*24));
-            if (o.status === '已完成' || o.status === '已发货') stats.completed++;
-            else if (daysLeft < 0) stats.overdue++;
-            else if (daysLeft <= 3) stats.veryUrgent++;
-            else if (daysLeft <= 7) stats.urgent++;
-            else stats.shipped++; 
-
+            const today = new Date();
+            const daysLeft = Math.ceil((orderDate - today) / (1000*60*60*24));
+            
+            if (o.status === '已完成' || o.status === '已发货') {
+                stats.completed++;
+            } else if (daysLeft < 0) {
+                stats.overdue++;
+            } else if (daysLeft <= 3) {
+                stats.veryUrgent++;
+            } else if (daysLeft <= 7) {
+                stats.urgent++;
+            } else {
+                stats.shipped++;
+            }
         }
     });
     const completedEl = document.getElementById('monthCompleted');
@@ -399,7 +409,11 @@ function createDayElement(date, currentMonth) {
     const ordersContainer = document.createElement('div');
     ordersContainer.className = 'day-orders';
 
-    const dateStr = date.toISOString().split('T')[0];
+    // 使用本地日期格式避免时区问题
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     const dayOrders = orders.filter(order => order.needed_date === dateStr);
 
     dayOrders.forEach(order => {
