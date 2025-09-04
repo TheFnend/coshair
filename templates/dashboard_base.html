@@ -3,6 +3,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}07妙妙屋订单管理系统{% endblock %}</title>
     
+    <!-- 首屏无闪烁：在CSS加载前同步设置宠物模式类 -->
+    <script>
+    (function(){
+        try {
+            var mode = localStorage.getItem('petMode');
+            var cls = document.documentElement.classList;
+            if (mode === 'moving') {
+                cls.add('pet-moving-mode');
+            } else if (mode === 'fixed') {
+                cls.add('pet-fixed-mode');
+            }
+        } catch (e) {}
+    })();
+    </script>
+
+    <!-- 首屏模式CSS：根据html类控制宠物容器显示，覆盖内联display避免闪现 -->
+    <style>
+    html.pet-moving-mode #spine-pet { display: none !important; }
+    html.pet-moving-mode #spine-moving-pet { display: block !important; }
+    html.pet-fixed-mode #spine-pet { display: block !important; }
+    html.pet-fixed-mode #spine-moving-pet { display: none !important; }
+    </style>
+
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
@@ -708,7 +731,12 @@
 
         const skelUrl = '{{ SPINE_MODEL_SKEL }}';
         const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
-        initPlayer(skelUrl, atlasUrl);
+        const __preferMoving = (function(){ try { return localStorage.getItem('petMode') === 'moving'; } catch(e) { return false; } })();
+        if (!__preferMoving) {
+            initPlayer(skelUrl, atlasUrl);
+        } else {
+            // 移动模式下不初始化固定宠物，避免首屏闪现
+        }
     })();
     
     // ==================== 移动宠物功能 ====================
@@ -2123,27 +2151,10 @@
          document.addEventListener('DOMContentLoaded', function() {
              const savedMode = localStorage.getItem('petMode');
              if (savedMode === 'moving') {
-                 // 延迟一点时间确保所有脚本都加载完成
-                 setTimeout(() => {
-                     if (typeof window.toggleMovingPet === 'function') {
-                         // 动态获取当前模型并启用移动宠物
-                         fetch('/api/spine_model/current')
-                             .then(response => response.json())
-                             .then(data => {
-                                 if (data.success && data.skel_path && data.atlas_path) {
-                                     window.toggleMovingPet(true);
-                                 } else {
-                                     // 回退到模板变量
-                                     window.toggleMovingPet(true);
-                                 }
-                             })
-                             .catch(error => {
-                                 console.error('获取当前模型失败:', error);
-                                 // 回退到模板变量
-                                 window.toggleMovingPet(true);
-                             });
-                     }
-                 }, 500);
+                 if (typeof window.toggleMovingPet === 'function') {
+                     // 直接启用移动宠物（模型加载逻辑在toggleMovingPet内部已覆盖本地恢复/回退）
+                     window.toggleMovingPet(true);
+                 }
              }
          });
      })();
