@@ -469,7 +469,7 @@
         
         <nav class="sidebar-nav">
             <div class="nav-item">
-                <a href="{{ url_for('dashboard_index') }}" class="nav-link {% if request.endpoint == 'dashboard_index' %}active{% endif %}">
+                <a href="{{ url_for('dashboard_index') }}" class="nav-link {% if request.endpoint == 'dashboard_index' or request.endpoint == 'index' %}active{% endif %}">
                     <i class="bi bi-house nav-icon"></i>
                     订单列表
                 </a>
