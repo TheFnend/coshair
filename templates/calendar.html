@@ -375,8 +375,11 @@ function createDayElement(date, currentMonth) {
     const dayDiv = document.createElement('div');
     dayDiv.className = 'calendar-day';
 
-    // 拖拽释放目标
-    dayDiv.dataset.date = date.toISOString().split('T')[0];
+    // 拖拽释放目标 - 使用本地日期格式避免时区偏移
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    dayDiv.dataset.date = `${year}-${month}-${day}`;
     dayDiv.addEventListener('dragover', (e) => { e.preventDefault(); dayDiv.classList.add('drag-over'); });
     dayDiv.addEventListener('dragleave', () => dayDiv.classList.remove('drag-over'));
     dayDiv.addEventListener('drop', (e) => {
@@ -410,9 +413,6 @@ function createDayElement(date, currentMonth) {
     ordersContainer.className = 'day-orders';
 
     // 使用本地日期格式避免时区问题
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
     const dayOrders = orders.filter(order => order.needed_date === dateStr);
 
