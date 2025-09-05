@@ -747,6 +747,16 @@
         let globalMoveSpeed = 1;
         let tickerRunning = false; // 确保ticker只注册一次
         
+        // 正在加载中的宠物集合，避免重复加载
+        let loadingSet = new Set();
+        // 从本地持久化的待加载队列预热，避免刷新后丢失
+        try {
+            (getPendingPets() || []).forEach(it => {
+                const k = (it && it.skelUrl ? it.skelUrl : '') + '|' + (it && it.atlasUrl ? it.atlasUrl : '');
+                if (k !== '|') loadingSet.add(k);
+            });
+        } catch (_) {}
+        
         // 物理常量（多宠物通用）
         const GRAVITY = 2200;       // px/s^2
         const AIR_FRICTION = 2.0;   // 空气阻力
@@ -948,8 +958,17 @@
         }
         
         // 添加新宠物到多宠物系统
-        function addMovingPet(skelUrl, atlasUrl, callback) {
+        function addMovingPet(skelUrl, atlasUrl, callback, options) {
             if (!skelUrl || !atlasUrl) return;
+            const opts = options || {};
+            
+            // 允许同一模型添加多个实例：仅做轻量登记，不阻塞
+            const key = (skelUrl + '|' + atlasUrl);
+            // 当从 pending/loaded 恢复时，都不再重复加入 pending；其它场景（用户添加）正常登记
+            if (!opts.fromPending && !opts.fromLoaded) {
+                try { addPendingPet(skelUrl, atlasUrl); } catch(_) {}
+            }
+            try { loadingSet.add(key); } catch(_) {}
             
             const loadingDiv = document.getElementById('spine-loading');
             if (loadingDiv) {
@@ -990,14 +1009,16 @@
                 const encodedSkelUrl = encodePathSegments(skelUrl);
                 
                 // 自定义imageLoader，确保atlas中的png文件名也会被正确编码
+                // 从 skel URL 推导出基础路径
+                const skelDir = encodedSkelUrl.substring(0, encodedSkelUrl.lastIndexOf('/') + 1);
                 const customImageLoaderFactory = function(ldr, namePrefix, baseUrl, imageOptions) {
-                    if (baseUrl && baseUrl.lastIndexOf('/') !== (baseUrl.length - 1)) {
-                        baseUrl += '/';
-                    }
+                    // 使用从 skel URL 推导的目录作为基础路径
+                    const actualBaseUrl = skelDir;
                     return function(line, callback) {
                         const name = namePrefix + line;
                         const encodedLine = line.split('/').map(encodeURIComponent).join('/');
-                        const url = baseUrl + encodedLine;
+                        const url = actualBaseUrl + encodedLine;
+                        console.log('Loading image:', url); // 调试日志
                         const cachedResource = ldr.resources[name];
                         if (cachedResource) {
                             const done = () => {
@@ -1016,6 +1037,7 @@
                                     }
                                     callback(resource.texture.baseTexture);
                                 } else {
+                                    console.error('Image loading failed:', url, resource.error);
                                     callback(null);
                                 }
                             });
@@ -1028,6 +1050,12 @@
                     metadata: {
                         imageLoader: customImageLoaderFactory
                     }
+                });
+                
+                loader.onError.add((error) => {
+                    console.error('Loader error:', error);
+                    // 出错时不要移除 pending，让其在刷新后有机会恢复
+                    try { loadingSet.delete(key); } catch(_) {}
                 });
                 
                 loader.load((loader, resources) => {
@@ -1103,6 +1131,9 @@
                         // 添加到多宠物数组
                         movingPets.push(pet);
                         dispatchPetsChanged();
+                        // 加载成功：若非 fromLoaded（包括用户新增与 pending 恢复），移除一个 pending 匹配项，并清理loading状态
+                        if (!opts || !opts.fromLoaded) { try { removePendingPet(skelUrl, atlasUrl); } catch(_) {} }
+                        loadingSet.delete(key);
                         
                         // 初始位置避让：尽量放在不与其它宠物重叠的位置
                         try {
@@ -1135,6 +1166,8 @@
                         console.log('可用动画:', spineObject.state.data.skeletonData.animations.map(anim => anim.name));
                     } catch (e) {
                         console.error('创建移动Spine对象时出错:', e);
+                        // 出错允许同会话重试，但保留待加载项供下次恢复
+                        loadingSet.delete(key);
                         const loadingDiv = document.getElementById('spine-loading');
                         if (loadingDiv) {
                             loadingDiv.style.display = 'block';
@@ -1144,6 +1177,8 @@
                 });
             } catch (error) {
                 console.error('加载移动Spine模型时出错:', error);
+                // 出错允许同会话重试，但保留待加载项供下次恢复
+                loadingSet.delete(key);
                 const loadingDiv = document.getElementById('spine-loading');
                 if (loadingDiv) {
                     loadingDiv.style.display = 'block';
@@ -1173,7 +1208,10 @@
         
         // 添加清除所有宠物的函数
         function clearAllPets() {
-            movingPets.forEach(pet => pet.destroy());
+            movingPets.forEach(pet => {
+                try { removePendingPet(pet.skelUrl, pet.atlasUrl); } catch(_) {}
+                pet.destroy();
+            });
             movingPets = [];
             stopMoving();
             console.log('已清除所有移动宠物');
@@ -1185,6 +1223,7 @@
         function removePet(petIndex) {
             if (petIndex >= 0 && petIndex < movingPets.length) {
                 const pet = movingPets[petIndex];
+                try { removePendingPet(pet.skelUrl, pet.atlasUrl); } catch(_) {}
                 pet.destroy();
                 movingPets.splice(petIndex, 1);
                 if (movingPets.length === 0) {
@@ -1986,8 +2025,35 @@
         }
         
         // 兼容旧接口：将loadMovingSpineModel映射到addMovingPet
-        function loadMovingSpineModel(skelUrl, atlasUrl, callback) {
-            return addMovingPet(skelUrl, atlasUrl, callback);
+        function loadMovingSpineModel(skelUrl, atlasUrl, callback, options) {
+            return addMovingPet(skelUrl, atlasUrl, callback, options);
+        }
+        
+        // 待加载队列持久化（解决刷新或切页过快导致未完成的模型丢失）
+        function getPendingPets(){
+            try { return JSON.parse(localStorage.getItem('movingPetsPending') || '[]'); } catch(e) { return []; }
+        }
+        function setPendingPets(list){
+            try { localStorage.setItem('movingPetsPending', JSON.stringify(Array.isArray(list) ? list : [])); } catch(e) {}
+        }
+        function addPendingPet(skelUrl, atlasUrl){
+            try {
+                const list = getPendingPets();
+                // 允许重复项，以支持同一模型的多实例
+                list.push({ skelUrl, atlasUrl });
+                setPendingPets(list);
+            } catch(_) {}
+        }
+        function removePendingPet(skelUrl, atlasUrl){
+            try {
+                const list = getPendingPets();
+                // 仅移除一个匹配项，避免一次性移除所有重复项
+                const idx = list.findIndex(it => it && it.skelUrl === skelUrl && it.atlasUrl === atlasUrl);
+                if (idx >= 0) {
+                    list.splice(idx, 1);
+                    setPendingPets(list);
+                }
+            } catch(_) {}
         }
         
         // 持久化与变更事件派发
@@ -2010,15 +2076,35 @@
             } catch(e) { /* ignore */ }
         }
         function restorePetsFromStorage(){
-            let list = [];
-            try { list = JSON.parse(localStorage.getItem('movingPets') || '[]'); } catch(e) { list = []; }
-            if (Array.isArray(list) && list.length > 0){
-                let delay = 0;
-                list.forEach(item => {
-                    if (item && item.skelUrl && item.atlasUrl){
-                        setTimeout(()=>{ loadMovingSpineModel(item.skelUrl, item.atlasUrl); }, delay);
-                        delay += 150;
+            let loaded = [];
+            try { loaded = JSON.parse(localStorage.getItem('movingPets') || '[]'); } catch(e) { loaded = []; }
+            const pending = getPendingPets();
+            const queue = [];
+            // 不去重：保留同一模型的多实例（loaded 列表记录了每个实例）
+            if (Array.isArray(loaded)) {
+                loaded.forEach(item => {
+                    if (item && item.skelUrl && item.atlasUrl) {
+                        queue.push({ skelUrl: item.skelUrl, atlasUrl: item.atlasUrl, fromLoaded: true });
                     }
+                });
+            }
+            if (Array.isArray(pending)) {
+                    pending.forEach(item => {
+                        if (item && item.skelUrl && item.atlasUrl) {
+                            queue.push({ skelUrl: item.skelUrl, atlasUrl: item.atlasUrl, fromPending: true });
+                        }
+                    });
+                }
+            if (queue.length > 0){
+                // 立即恢复，避免切页过快导致定时器未触发而丢失
+                queue.forEach(item => {
+                    let opts;
+                    if (item && item.fromPending) {
+                        opts = { fromPending: true };
+                    } else if (item && item.fromLoaded) {
+                        opts = { fromLoaded: true };
+                    }
+                    loadMovingSpineModel(item.skelUrl, item.atlasUrl, null, opts);
                 });
                 return true;
             }
@@ -2105,32 +2191,38 @@
                     initMovingPet();
                 }
 
-                // 先尝试从本地存储恢复多宠物，否则回退到当前模型
-                if (!restorePetsFromStorage()){
-                    // 动态获取当前选择的模型
-                    fetch('/api/spine_model/current')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success && data.skel_path && data.atlas_path) {
-                                setTimeout(() => loadMovingSpineModel(data.skel_path, data.atlas_path), 100);
-                            } else {
-                                // 回退到模板变量（若存在）
-                                const skelUrl = '{{ SPINE_MODEL_SKEL }}';
-                                const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
-                                if (skelUrl && atlasUrl) {
-                                    setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
-                                }
-                            }
-                        })
-                        .catch(error => {
-                            console.error('获取当前模型失败:', error);
-                            // 回退到模板变量（若存在）
-                            const skelUrl = '{{ SPINE_MODEL_SKEL }}';
-                            const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
-                            if (skelUrl && atlasUrl) {
-                                setTimeout(() => loadMovingSpineModel(skelUrl, atlasUrl), 100);
-                            }
-                        });
+                // 先尝试从本地存储恢复多宠物
+                const restored = restorePetsFromStorage();
+                
+                // 只有在完全没有宠物数据时才回退到单模型加载
+                if (!restored) {
+                    // 检查是否已有移动宠物，避免覆盖现有状态
+                    setTimeout(() => {
+                        if (movingPets.length === 0) {
+                            // 动态获取当前选择的模型
+                            fetch('/api/spine_model/current')
+                                .then(response => response.json())
+                                .then(data => {
+                                    // 再次检查，确保在异步过程中没有其他宠物被加载
+                                    if (movingPets.length === 0 && data.success && data.skel_path && data.atlas_path) {
+                                        // 不使用 consumePending:true，确保在加载开始时将其登记到待加载队列
+                                        loadMovingSpineModel(data.skel_path, data.atlas_path);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('获取当前模型失败:', error);
+                                    // 最后的回退：模板变量（仅在确实没有宠物时）
+                                    if (movingPets.length === 0) {
+                                        const skelUrl = '{{ SPINE_MODEL_SKEL }}';
+                                        const atlasUrl = '{{ SPINE_MODEL_ATLAS }}';
+                                        if (skelUrl && atlasUrl) {
+                                            // 不使用 consumePending:true，以便在未完成时记录到 pending
+                                            loadMovingSpineModel(skelUrl, atlasUrl);
+                                        }
+                                    }
+                                });
+                        }
+                    }, 200); // 给恢复过程更多时间
                 }
             } else {
                 container.style.display = 'none';
