@@ -573,8 +573,13 @@
     </div>
     <div class="mobile-overlay"></div>
 
-    <!-- 固定位置的宠物容器 -->
-    <div id="spine-pet" aria-label="网页宠物" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index: 1050; pointer-events:auto;"></div>
+    <!-- 固定位置的宠物容器（增加包装器与交互开关） -->
+    <div id="spine-pet-wrapper" aria-label="网页宠物容器" style="position:fixed; right:16px; bottom:16px; width:220px; height:260px; z-index:1050; pointer-events:none;">
+         <div id="spine-pet" aria-label="网页宠物" style="width:100%; height:100%; pointer-events:none;"></div>
+         <button id="spine-pet-toggle" type="button" title="当前：穿透（点击穿过宠物）" aria-pressed="false" style="position:absolute; top:-10px; right:-10px; left:auto; width:28px; height:28px; border-radius:14px; border:none; background:rgba(0,0,0,0.5); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3); pointer-events:auto;">
+             <span style="font-size:14px; line-height:1;">透</span>
+         </button>
+     </div>
     
     <!-- 全屏移动宠物容器 -->
     <div id="spine-moving-pet" aria-label="移动宠物" style="position:fixed; top:0px; left:0px; width:100vw; height:100vh; z-index: 1000; pointer-events:none; display:none; overflow: visible;">
@@ -644,6 +649,47 @@
         if (!container) return;
         container.style.width = playerWidth + 'px';
         container.style.height = playerHeight + 'px';
+        // 同步更新包装器尺寸
+        (function(){
+            const wrapperEl0 = document.getElementById('spine-pet-wrapper');
+            if (wrapperEl0) {
+                wrapperEl0.style.width = playerWidth + 'px';
+                wrapperEl0.style.height = playerHeight + 'px';
+            }
+        })();
+        
+        // 交互模式切换（穿透/可互动）
+        (function(){
+            const wrapperEl = document.getElementById('spine-pet-wrapper');
+            const toggleBtn = document.getElementById('spine-pet-toggle');
+            function setPetInteractEnabled(enabled) {
+                try { localStorage.setItem('petInteract', enabled ? 'on' : 'off'); } catch(e) {}
+                const petEl = document.getElementById('spine-pet');
+                if (petEl) petEl.style.pointerEvents = enabled ? 'auto' : 'none';
+                if (wrapperEl) wrapperEl.style.pointerEvents = 'none'; // 始终不拦截，确保底部可点
+                if (toggleBtn) {
+                    toggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+                    toggleBtn.title = enabled ? '当前：可互动（点击切换为穿透）' : '当前：穿透（点击切换为可互动）';
+                    toggleBtn.innerHTML = '<span style="font-size:14px; line-height:1;">' + (enabled ? '互' : '透') + '</span>';
+                    toggleBtn.style.opacity = enabled ? '0.9' : '0.6';
+                }
+            }
+            const savedInteract = (function(){ try { return localStorage.getItem('petInteract') === 'on'; } catch(e){ return false; } })();
+            setPetInteractEnabled(savedInteract);
+            if (toggleBtn && !toggleBtn._bound) {
+                toggleBtn.addEventListener('click', function(ev){
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                    const current = toggleBtn.getAttribute('aria-pressed') === 'true';
+                    setPetInteractEnabled(!current);
+                });
+                toggleBtn.addEventListener('mouseenter', function(){ toggleBtn.style.opacity = '0.95'; });
+                toggleBtn.addEventListener('mouseleave', function(){ toggleBtn.style.opacity = (toggleBtn.getAttribute('aria-pressed') === 'true') ? '0.9' : '0.6'; });
+                toggleBtn._bound = true;
+            }
+            // 暴露到全局，便于其他页面（如设置页）需要时可调用
+            window.setPetInteractEnabled = setPetInteractEnabled;
+        })();
         
         // 暴露更新宠物尺寸的全局函数
         window.updatePetSize = function(width, height, scale) {
@@ -2202,12 +2248,13 @@
         // 在dashboard_base中也实现切换移动宠物模式的函数
         window.toggleMovingPet = function(enable) {
             const container = document.getElementById('spine-moving-pet');
+            const fixedWrapper = document.getElementById('spine-pet-wrapper');
             const fixedPet = document.getElementById('spine-pet');
-            if (!container || !fixedPet) return;
+            if (!container || !fixedWrapper || !fixedPet) return;
 
             if (enable) {
                 container.style.display = 'block';
-                fixedPet.style.display = 'none';
+                fixedWrapper.style.display = 'none';
 
                 if (!movingApp) {
                     initMovingPet();
@@ -2248,7 +2295,7 @@
                 }
             } else {
                 container.style.display = 'none';
-                fixedPet.style.display = 'block';
+                if (fixedWrapper) fixedWrapper.style.display = 'block';
                 // 进入固定模式时，立即按 localStorage 应用尺寸与缩放
                 try {
                     const w = localStorage.getItem('petFixedWidth');
@@ -2259,6 +2306,7 @@
                     const scale = (s && parseFloat(s)>0) ? parseFloat(s) : 1.0;
                     fixedPet.style.width = width + 'px';
                     fixedPet.style.height = height + 'px';
+                    if (fixedWrapper) { fixedWrapper.style.width = width + 'px'; fixedWrapper.style.height = height + 'px'; }
                     if (typeof window.updatePetSize === 'function') {
                         window.updatePetSize(width, height, scale);
                     }

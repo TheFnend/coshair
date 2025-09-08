@@ -1556,9 +1556,14 @@ function initPetSizeSettings() {
         
         // 应用到当前页面的宠物
         const petContainer = document.getElementById('spine-pet');
+        const petWrapper = document.getElementById('spine-pet-wrapper');
         if (petContainer) {
             petContainer.style.width = width + 'px';
             petContainer.style.height = height + 'px';
+        }
+        if (petWrapper) {
+            petWrapper.style.width = width + 'px';
+            petWrapper.style.height = height + 'px';
         }
         
         // 通知宠物系统更新尺寸和缩放
